@@ -1,0 +1,8 @@
+# Godot
+.godot/
+/android/
+*.translation
+export_presets.cfg
+# Blender
+*.blend1
+*.blend@
