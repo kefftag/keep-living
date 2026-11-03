@@ -19,6 +19,7 @@ func _process(_delta: float) -> void:
 			if now >= ev["at"] - warn_ahead and now < ev["at"]:
 				_warned[ev["at"]] = true
 				Game.earthquake_warning.emit()
+				Sfx.play("eew_alarm", null, -2.0, 0.0)
 				Game.say("EARTHQUAKE EARLY WARNING. Strong shaking expected. Get clear of tall furniture!", "danger")
 	while Game.scheduled_events.size() > 0 and now >= Game.scheduled_events[0]["at"]:
 		var ev: Dictionary = Game.scheduled_events.pop_front()
@@ -33,10 +34,12 @@ func _fire(ev: Dictionary) -> void:
 			_quake(ev.get("strength", 1.0))
 		"water_cut":
 			Game.water_running = false
+			Sfx.play("pipes_knock", Vector3(1.0, 1.5, 4.5), 0.0)
 			Game.say("The pipes knock and shudder. The water has stopped.", "warn")
 			Game.world_changed.emit()
 		"power_cut":
 			Game.power_on = false
+			Sfx.play("power_down", null, -4.0, 0.0)
 			Game.say("The lights die. The fridge falls silent. The city goes dark around you.", "warn")
 			Game.world_changed.emit()
 		"mail":
@@ -48,6 +51,7 @@ func _quake(strength: float) -> void:
 	if Game.player_sleeping:
 		Game.say("You jolt awake on the bed. MOVE!", "danger")
 	Game.earthquake.emit(strength)
+	Sfx.play("quake_rumble", null, 2.0 * strength, 0.03)
 	Game.shake.emit(0.35 * strength, 3.5)
 	await get_tree().create_timer(PEAK_DELAY).timeout
 	if not Game.is_alive_phase():

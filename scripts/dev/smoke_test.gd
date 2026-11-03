@@ -241,7 +241,7 @@ func _run() -> void:
 
 	if _failed:
 		print("SMOKE FAILED")
-		get_tree().quit(1)
+		await _quit(1)
 		return
 	print("SMOKE: dying worked, waking up again...")
 	hud._restart()  # reloads the scene; a fresh smoke test runs _second_life()
@@ -264,4 +264,15 @@ func _second_life() -> void:
 	main.apartment.nav_region.get_node("phone").perform(false)
 	_check(seen == [false], "re-reading a known clue isn't treated as new")
 	print("SMOKE OK" if not _failed else "SMOKE FAILED")
-	get_tree().quit(1 if _failed else 0)
+	await _quit(1 if _failed else 0)
+
+
+## Stop every sound first, or playbacks still mixing at exit show up as leaks.
+func _quit(code: int) -> void:
+	for kind in ["AudioStreamPlayer", "AudioStreamPlayer3D"]:
+		for p in get_tree().root.find_children("*", kind, true, false):
+			p.stop()
+			p.stream = null
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_tree().quit(code)

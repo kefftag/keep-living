@@ -1,0 +1,25 @@
+# Model credits
+
+CC0 models from [Poly Haven](https://polyhaven.com), fetched by `tools/models/fetch_models.py`:
+
+- `toolbox/`: [metal_toolbox](https://polyhaven.com/a/metal_toolbox)
+- `side_table/`: [side_table_01](https://polyhaven.com/a/side_table_01)
+- `ac_outdoor/`: [exterior_aircon_unit](https://polyhaven.com/a/exterior_aircon_unit)
+- `storage_shelf/`: [steel_frame_shelves_01](https://polyhaven.com/a/steel_frame_shelves_01)
+- `dining_chair/`: [dining_chair_02](https://polyhaven.com/a/dining_chair_02)
+- `bat/`: [baseball_bat](https://polyhaven.com/a/baseball_bat)
+- `binoculars/`: [binoculars](https://polyhaven.com/a/binoculars)
+- `laptop/`: [classic_laptop](https://polyhaven.com/a/classic_laptop)
+- `television/`: [television_02](https://polyhaven.com/a/television_02)
+- `alarm_clock/`: [alarm_clock_01](https://polyhaven.com/a/alarm_clock_01)
+- `kettle/`: [vintage_electric_kettle](https://polyhaven.com/a/vintage_electric_kettle)
+- `water_jug/`: [plastic_bottle_gallon](https://polyhaven.com/a/plastic_bottle_gallon)
+- `trashbag/`: [trashbag](https://polyhaven.com/a/trashbag)
+- `boots/`: [rubber_boots](https://polyhaven.com/a/rubber_boots)
+- `cardboard_box/`: [cardboard_box_01](https://polyhaven.com/a/cardboard_box_01)
+- `plant/`: [potted_plant_02](https://polyhaven.com/a/potted_plant_02)
+- `wall_clock/`: [wall_clock](https://polyhaven.com/a/wall_clock)
+- `food_cans/`: [russian_food_cans_01](https://polyhaven.com/a/russian_food_cans_01)
+- `broom/`: [plastic_broom](https://polyhaven.com/a/plastic_broom)
+- `desk_lamp/`: [desk_lamp_arm_01](https://polyhaven.com/a/desk_lamp_arm_01)
+- `pillows/`: [throw_pillows_01](https://polyhaven.com/a/throw_pillows_01)

@@ -266,6 +266,7 @@ func damage(amount: float, cause: String) -> void:
 	health -= amount
 	if amount >= 5.0:
 		shake.emit(0.25, 0.25)
+		Sfx.play("bite" if amount < 50.0 else "hit_flesh", null, -2.0)
 	if health <= 0.0:
 		health = 0.0
 		_die(cause)

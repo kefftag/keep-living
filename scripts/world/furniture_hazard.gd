@@ -58,6 +58,10 @@ func get_flag() -> String:
 	return ""
 
 
+func get_hold_sound(_alt: bool) -> String:
+	return "hammer"
+
+
 func get_duration(alt: bool) -> float:
 	return 5.0 if alt else 2.5
 
@@ -94,6 +98,7 @@ func on_quake(player: Node3D) -> void:
 	shape_node.position = Vector3(0, lying.y * 0.5, size.z * 0.5 + size.y * 0.5)
 	refresh_flag()
 	Game.say("The %s topples over with a crash!" % display_name.to_lower(), "danger")
+	Sfx.play("furniture_crash", global_position + Vector3(0, 0.5, 0), 4.0)
 	Game.make_noise(global_position, 12.0)
 	Game.shake.emit(0.5, 0.4)
 	Game.nav_dirty.emit()

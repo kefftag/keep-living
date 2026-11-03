@@ -7,6 +7,20 @@ var clue_id := ""
 var search_verb := "Search"
 var spoils_without_power := false
 var searched := false
+var _hum: AudioStreamPlayer3D
+
+
+func _ready() -> void:
+	super._ready()
+	if spoils_without_power:
+		_hum = Sfx.loop_on("fridge_hum", self, -14.0, Vector3(0, 0.3, 0))
+		Game.world_changed.connect(func():
+			if not Game.power_on and is_instance_valid(_hum):
+				_hum.queue_free())
+
+
+func get_hold_sound(_alt: bool) -> String:
+	return "rummage"
 
 
 func get_prompt(alt: bool) -> String:

@@ -29,6 +29,9 @@ var bat: Node3D
 var fist: Node3D
 var flashlight: SpotLight3D
 
+var hold_sound_t := 0.0
+const HOLD_SOUND_EVERY := {"hammer": 0.45, "rummage": 0.6, "water_pour": 2.3}
+
 var _shake_amount := 0.0
 var _shake_left := 0.0
 var _bed: Node3D = null
@@ -68,15 +71,20 @@ func _ready() -> void:
 	bat.rotation = Vector3(deg_to_rad(55), deg_to_rad(-10), 0)
 	bat.position = Vector3(0, 0, -0.08)
 	viewmodel.add_child(bat)
-	var shaft := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.032
-	cyl.bottom_radius = 0.018
-	cyl.height = 0.8
-	shaft.mesh = cyl
-	shaft.material_override = Props.mat(Color(0.72, 0.73, 0.76))
-	shaft.position.y = 0.32
-	bat.add_child(shaft)
+	if Props.has_model("bat"):
+		var real_bat := Props.visual("bat", Vector3(0.08, 0.84, 0.08), Color.WHITE, true)
+		real_bat.position.y = -0.1
+		bat.add_child(real_bat)
+	else:
+		var shaft := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.032
+		cyl.bottom_radius = 0.018
+		cyl.height = 0.8
+		shaft.mesh = cyl
+		shaft.material_override = Props.mat(Color(0.72, 0.73, 0.76))
+		shaft.position.y = 0.32
+		bat.add_child(shaft)
 
 	flashlight = SpotLight3D.new()
 	flashlight.spot_range = 14.0
@@ -148,9 +156,10 @@ func _physics_process(delta: float) -> void:
 	if moving:
 		bob_t += delta * (6.0 if sneaking else 9.0)
 		step_noise_t += delta
-		if step_noise_t > 0.5:
+		if step_noise_t > (0.62 if sneaking else 0.45):
 			step_noise_t = 0.0
 			Game.make_noise(global_position, 0.3 if sneaking else 1.0)
+			Sfx.play(_floor_sound(), global_position, -16.0 if sneaking else -7.0, 0.1)
 	else:
 		bob_t = lerp(bob_t, round(bob_t / PI) * PI, 10.0 * delta)
 	head.position.y = EYE_HEIGHT + sin(bob_t) * 0.025
@@ -210,6 +219,7 @@ func _process_hold(delta: float) -> bool:
 	if not primary and not alt:
 		hold_lock = false
 		hold_progress = 0.0
+		hold_sound_t = 0.0
 		return false
 	if hold_lock or not is_instance_valid(focus):
 		hold_progress = 0.0
@@ -222,6 +232,12 @@ func _process_hold(delta: float) -> bool:
 		hold_progress = 0.0
 		return false
 	hold_progress += delta * Game.action_speed()
+	var hs: String = focus.get_hold_sound(hold_alt)
+	if hs != "":
+		hold_sound_t -= delta
+		if hold_sound_t <= 0.0:
+			hold_sound_t = HOLD_SOUND_EVERY.get(hs, 0.5)
+			Sfx.play(hs, focus.global_position + Vector3(0, 0.8, 0), -4.0)
 	Game.make_noise(global_position, focus.get_noise(hold_alt) * delta)
 	if hold_progress >= focus.get_duration(hold_alt):
 		hold_progress = 0.0
@@ -248,6 +264,7 @@ func _swing() -> void:
 	tween.tween_property(viewmodel, "rotation", Vector3(-0.4, -0.7, -0.3), 0.14)
 	tween.tween_property(viewmodel, "rotation", Vector3.ZERO, 0.22)
 	Game.make_noise(global_position, 2.5)
+	Sfx.play("swing", null, -8.0)
 	var hit := false
 	var fwd := look_dir()
 	fwd.y = 0
@@ -260,9 +277,19 @@ func _swing() -> void:
 		if to.length() > SWING_RANGE or fwd.dot(to.normalized()) < 0.5:
 			continue
 		z.take_hit(Game.weapon_damage(), to.normalized())
+		Sfx.play("hit_flesh", z.global_position + Vector3(0, 1.2, 0), -2.0)
 		hit = true
 	if hit:
 		_on_shake(0.4, 0.12)
+
+
+func _floor_sound() -> String:
+	var p := global_position
+	if p.y < -0.07:
+		return "step_tile"  # genkan / corridor
+	if p.x < 2.73 and p.z > 3.64:
+		return "step_tile"  # washroom, bath, toilet
+	return "step_wood"
 
 
 # --- Sleep ---------------------------------------------------------------------------

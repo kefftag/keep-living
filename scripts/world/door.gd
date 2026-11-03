@@ -13,6 +13,7 @@ var swing := 1.0         # hinged: +1 opens towards local -Z, -1 towards +Z
 var hinge_left := true   # hinged: hinge at local -X (true) or +X
 var slide_sign := -1.0   # sliding: which way along local X it slides
 var glass := false
+var wood := true  # wood-grain leaf (most Japanese interior doors) or plain
 var is_open := false
 
 var _t := 0.0  # 0 closed .. 1 open
@@ -37,7 +38,11 @@ func _build() -> void:
 		leaf = Props.visual(model_name, Vector3(width - 0.01, height - 0.01, 0.035), color)
 	else:
 		leaf = Node3D.new()
-		leaf.add_child(Props.box(Vector3(width - 0.01, height - 0.01, 0.035), color, Vector3(0, height * 0.5, 0)))
+		var leaf_size := Vector3(width - 0.01, height - 0.01, 0.035)
+		if wood:
+			leaf.add_child(Props.sbox(leaf_size, "wood_light", Vector3(0, height * 0.5, 0), color, false))
+		else:
+			leaf.add_child(Props.box(leaf_size, color, Vector3(0, height * 0.5, 0)))
 		if glass:
 			leaf.add_child(Props.box(Vector3(width * 0.45, height * 0.5, 0.04), Color(0.7, 0.82, 0.9, 0.45), Vector3(0, height * 0.6, 0)))
 		var hx := (width * 0.5 - 0.08) * (1.0 if hinge_left else -1.0)
@@ -72,6 +77,10 @@ func set_open(value: bool) -> void:
 	if value == is_open:
 		return
 	is_open = value
+	if kind == "sliding":
+		Sfx.play("slide_door", global_position + Vector3(0, 1.0, 0), -6.0)
+	else:
+		Sfx.play("door_open" if is_open else "door_close", global_position + Vector3(0, 1.0, 0), -4.0)
 	if _tween:
 		_tween.kill()
 	_tween = create_tween()

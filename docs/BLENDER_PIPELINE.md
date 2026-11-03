@@ -1,9 +1,19 @@
 # Blender → Godot pipeline
 
-The game builds every prop as a grey box in code. When
-`assets/models/<name>.glb` exists, that model is used instead
-(`scripts/world/props.gd`). Art can therefore replace boxes one prop at a time,
-and nothing breaks if a model is missing.
+Setting up Blender MCP: see [BLENDER_MCP_SETUP.md](BLENDER_MCP_SETUP.md).
+
+Every prop has a name. `scripts/world/props.gd` looks for, in order:
+
+1. `assets/models/<name>/<name>.gltf`: a CC0 scan from Poly Haven
+   (`tools/models/fetch_models.py`), uniformly scaled to fit the prop's box.
+2. `assets/models/<name>.glb`: our own Blender model, used exactly as authored.
+   Its flat `kl_*` materials are swapped for the textured surfaces in
+   `assets/textures/` (wood veneers, linen, marble).
+3. A grey box.
+
+So art can replace boxes one prop at a time, and nothing breaks if a model is
+missing. A .glb with real textured materials (anything not named `kl_*`) is
+left alone.
 
 ## Model contract
 

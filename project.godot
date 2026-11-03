@@ -14,6 +14,7 @@ config/features=PackedStringArray("4.4", "Forward Plus")
 
 Meta="*res://scripts/autoload/meta_progress.gd"
 Game="*res://scripts/autoload/game_state.gd"
+Sfx="*res://scripts/autoload/sfx.gd"
 
 [display]
 

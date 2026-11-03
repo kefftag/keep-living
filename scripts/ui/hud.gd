@@ -492,6 +492,7 @@ func _on_clue_found(clue_id: String, is_new: bool) -> void:
 
 func _show_reading(clue_id: String, is_new: bool) -> void:
 	var clue: Dictionary = Scenario.CLUES[clue_id]
+	Sfx.play("paper", null, -4.0)
 	_open("reading")
 	overlay_box.add_child(_heading(clue["title"], 26))
 	if is_new:
@@ -616,6 +617,13 @@ func _on_player_died(cause: String) -> void:
 
 
 func _on_run_won() -> void:
+	if Sfx.has("helicopter"):
+		var heli := AudioStreamPlayer.new()
+		heli.stream = Sfx._pick("helicopter")
+		heli.process_mode = Node.PROCESS_MODE_ALWAYS
+		heli.volume_db = -6.0
+		add_child(heli)
+		heli.play()
 	_open("end")
 	overlay_box.add_child(_heading("RESCUED", 44, C_GOOD))
 	overlay_box.add_child(_text("Dawn, day %d. Rotor noise grows over the rooftops, and a rope ladder drops past your balcony.\n\nYou kept living." % Game.day, 18))

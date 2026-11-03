@@ -93,6 +93,13 @@ func _process(_delta: float) -> void:
 	_update_daylight()
 
 
+func _exit_tree() -> void:
+	# Static material caches would otherwise outlive the scene ("resources still in use").
+	const Props := preload("res://scripts/world/props.gd")
+	Props._materials.clear()
+	Props._surfaces.clear()
+
+
 ## Daylight follows the clock: day white, dusk orange, night dark blue.
 func _update_daylight() -> void:
 	var m := fmod(Game.minutes, 1440.0)

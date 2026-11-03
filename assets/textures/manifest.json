@@ -1,0 +1,50 @@
+{
+  "wallpaper": {
+    "size": 0.5,
+    "source": "generated"
+  },
+  "floor_wood": {
+    "size": 2.08,
+    "source": "polyhaven:laminate_floor_03"
+  },
+  "floor_genkan": {
+    "size": 2.0,
+    "source": "polyhaven:rubber_tiles"
+  },
+  "floor_cushion": {
+    "size": 2.0,
+    "source": "polyhaven:floor_tiles_04"
+  },
+  "floor_bath": {
+    "size": 1.8,
+    "source": "polyhaven:anti_skid_tiles"
+  },
+  "concrete_floor": {
+    "size": 2.5,
+    "source": "polyhaven:concrete_floor_worn_001"
+  },
+  "concrete_wall": {
+    "size": 2.7,
+    "source": "polyhaven:concrete_wall_008"
+  },
+  "tile_white": {
+    "size": 1.2,
+    "source": "polyhaven:long_white_tiles"
+  },
+  "wood_light": {
+    "size": 1.0,
+    "source": "polyhaven:oak_veneer_01"
+  },
+  "wood": {
+    "size": 1.0,
+    "source": "polyhaven:cherry_veneer"
+  },
+  "wood_dark": {
+    "size": 1.0,
+    "source": "polyhaven:black_walnut_veneer_01"
+  },
+  "fabric": {
+    "size": 0.6,
+    "source": "polyhaven:rough_linen"
+  }
+}

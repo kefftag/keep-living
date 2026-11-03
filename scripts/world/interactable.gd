@@ -78,3 +78,8 @@ func get_noise(_alt: bool) -> float:
 
 func perform(_alt: bool) -> void:
 	pass
+
+
+## Sound repeated while the action is held ("" = silent).
+func get_hold_sound(_alt: bool) -> String:
+	return ""

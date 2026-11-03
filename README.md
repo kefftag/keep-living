@@ -10,8 +10,10 @@ again. You keep what you learned, and a small advantage (an **Echo**).
 Scenario 1, **Outbreak**, is playable: a zombie apocalypse you have to *deduce*
 from clues. More scenarios will reuse the same apartment.
 
-Built with **Godot 4.4** (GDScript). Props are made in **Blender**, driven
-through Blender MCP or headless scripts.
+Built with **Godot 4.4** (GDScript). Art: CC0 PBR textures and photoscanned
+props from [Poly Haven](https://polyhaven.com), plus a Blender prop kit
+(Blender MCP setup: [docs/BLENDER_MCP_SETUP.md](docs/BLENDER_MCP_SETUP.md)).
+Every sound is synthesised by `tools/audio/make_sounds.py`.
 
 ![The LDK](docs/img/ldk.png)
 
@@ -88,7 +90,11 @@ scripts/
   world/door.gd               # hinged / sliding interior doors
   ui/hud.gd                   # all UI
   dev/smoke_test.gd           # scripted playthrough
-assets/models/*.glb           # props from tools/blender/build_props.py
+  autoload/sfx.gd             # "Sfx": 3D sound, reverb, ambience
+assets/models/<name>.glb      # Blender kit (tools/blender/build_props.py)
+assets/models/<name>/         # Poly Haven CC0 scans (tools/models/fetch_models.py)
+assets/textures/              # PBR surfaces (tools/textures/fetch_textures.py)
+assets/audio/                 # synthesised sound (tools/audio/make_sounds.py)
 tools/blender/build_props.py  # Blender prop kit (MCP or headless)
 docs/                         # GDD, Blender pipeline
 ```

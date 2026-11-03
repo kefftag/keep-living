@@ -48,7 +48,7 @@ const C_TILE := Color(0.36, 0.36, 0.37)
 const C_BATH := Color(0.82, 0.84, 0.86)
 const C_SKIRTING := Color(0.95, 0.95, 0.94)
 const C_WOOD := Color(0.62, 0.45, 0.3)
-const C_DOOR := Color(0.78, 0.7, 0.6)
+const C_DOOR := Color(1.0, 0.95, 0.88)
 
 var nav_region: NavigationRegion3D
 var barricades := {}  # id -> barricade node
@@ -103,37 +103,37 @@ func _queue_rebake() -> void:
 
 # --- Structure -----------------------------------------------------------------
 
-func _solid(size: Vector3, center: Vector3, color: Color, parent: Node = null) -> StaticBody3D:
+func _solid(size: Vector3, center: Vector3, color: Color, parent: Node = null, surf: String = "") -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	body.collision_mask = 0
 	body.position = center
 	body.add_child(Props.box_shape(size))
-	body.add_child(Props.box(size, color))
+	body.add_child(Props.sbox(size, surf, Vector3.ZERO, color) if surf != "" else Props.box(size, color))
 	(parent if parent else nav_region).add_child(body)
 	return body
 
 
 ## Floor slab from x0..x1, z0..z1 whose top is at `top`.
-func _floor(x0: float, x1: float, z0: float, z1: float, top: float, color: Color) -> void:
+func _floor(x0: float, x1: float, z0: float, z1: float, top: float, surf: String, tint: Color = Color.WHITE) -> void:
 	var t := 0.2
-	_solid(Vector3(x1 - x0, t, z1 - z0), Vector3((x0 + x1) * 0.5, top - t * 0.5, (z0 + z1) * 0.5), color)
+	_solid(Vector3(x1 - x0, t, z1 - z0), Vector3((x0 + x1) * 0.5, top - t * 0.5, (z0 + z1) * 0.5), tint, null, surf)
 
 
 func _build_floors() -> void:
 	# Rooms at 0, wet areas use cushion floor / FRP.
-	_floor(0, 2.73, 0, 3.64, 0, C_FLOORING)          # bedroom
-	_floor(2.73, 6.37, 0, 5.46, 0, C_FLOORING)       # LDK + kitchen
-	_floor(2.73, 3.64, 3.64, 6.37, 0, C_FLOORING)    # hallway (overlaps LDK slab a little, fine)
-	_floor(3.64, 4.55, 5.46, 6.37, 0, C_FLOORING)    # closet
-	_floor(0, 2.73, 3.64, 5.46, 0, C_CUSHION)        # washroom
-	_floor(0, 1.82, 5.46, 7.28, 0, C_BATH)           # unit bath
-	_floor(1.82, 2.73, 5.46, 7.28, 0, C_CUSHION)     # toilet
+	_floor(0, 2.73, 0, 3.64, 0, "floor_wood")        # bedroom
+	_floor(2.73, 6.37, 0, 5.46, 0, "floor_wood")     # LDK + kitchen
+	_floor(2.73, 3.64, 3.64, 6.37, 0, "floor_wood")  # hallway (overlaps LDK slab a little, fine)
+	_floor(3.64, 4.55, 5.46, 6.37, 0, "floor_wood")  # closet
+	_floor(0, 2.73, 3.64, 5.46, 0, "floor_cushion")   # washroom
+	_floor(0, 1.82, 5.46, 7.28, 0, "floor_bath")      # unit bath
+	_floor(1.82, 2.73, 5.46, 7.28, 0, "floor_cushion")  # toilet
 	# One step down: genkan, alcove, outdoor corridor.
-	_floor(2.73, 4.55, 6.37, 7.28, GENKAN_Y, C_TILE)
-	_floor(4.55, 6.37, 5.46, 7.28, GENKAN_Y, Color(0.45, 0.46, 0.48))
-	_floor(-0.5, 10.5, 7.28, 8.78, GENKAN_Y, Color(0.45, 0.46, 0.48))
-	_floor(-0.1, 6.47, -1.5, 0, -0.02, Color(0.55, 0.55, 0.55))  # balcony
+	_floor(2.73, 4.55, 6.37, 7.28, GENKAN_Y, "floor_genkan")
+	_floor(4.55, 6.37, 5.46, 7.28, GENKAN_Y, "concrete_floor", Color(0.8, 0.8, 0.8))
+	_floor(-0.5, 10.5, 7.28, 8.78, GENKAN_Y, "concrete_floor", Color(0.8, 0.8, 0.8))
+	_floor(-0.1, 6.47, -1.5, 0, -0.02, "concrete_floor")  # balcony
 	# The 上がり框 step is drawn vertical, but collides as a short ramp so
 	# feet and the navmesh can climb it.
 	var ramp_len := 0.3
@@ -151,14 +151,16 @@ func _build_floors() -> void:
 	ceiling.collision_layer = 1
 	ceiling.position = Vector3(5.0, CEIL + 0.1, 3.6)
 	ceiling.add_child(Props.box_shape(Vector3(12, 0.2, 10.4)))
-	ceiling.add_child(Props.box(Vector3(12, 0.2, 10.4), Color(0.93, 0.93, 0.92)))
+	ceiling.add_child(Props.sbox(Vector3(12, 0.2, 10.4), "wallpaper", Vector3.ZERO, Color(1.0, 1.0, 1.0)))
 	add_child(ceiling)  # not under the nav region
 
 
 ## Axis-aligned wall from a to b with door/window openings
 ## ([start, end, top] measured along the wall from a). Lintels fill above.
 func _wall(a: Vector2, b: Vector2, openings: Array = [], thick: float = INT_T, color: Color = C_WALLPAPER,
-		bottom: float = 0.0, height: float = CEIL, skirting: bool = true) -> void:
+		bottom: float = 0.0, height: float = CEIL, skirting: bool = true, outer: float = 0.0) -> void:
+	# outer: which side is outdoors (+1/-1 along the wall's +Z/+X normal) for a concrete skin.
+	var surf := "wallpaper" if color == C_WALLPAPER else ("concrete_wall" if color == C_CONCRETE else "")
 	var length := a.distance_to(b)
 	var dir := (b - a).normalized()
 	var along_x: bool = abs(dir.x) > 0.5
@@ -182,7 +184,12 @@ func _wall(a: Vector2, b: Vector2, openings: Array = [], thick: float = INT_T, c
 		var ext := 0.0 if is_lintel else thick * 0.5  # overlap at corners
 		var mid: Vector2 = a + dir * ((p[0] + p[1]) * 0.5)
 		var sz: Vector3 = Vector3(seg + ext * 2.0, h, thick) if along_x else Vector3(thick, h, seg + ext * 2.0)
-		_solid(sz, Vector3(mid.x, (p[2] + p[3]) * 0.5, mid.y), color)
+		var center := Vector3(mid.x, (p[2] + p[3]) * 0.5, mid.y)
+		_solid(sz, center, Color.WHITE if surf != "" else color, null, surf)
+		if outer != 0.0:
+			var n: Vector3 = Vector3(0, 0, outer) if along_x else Vector3(outer, 0, 0)
+			var skin: Vector3 = Vector3(sz.x, sz.y, 0.012) if along_x else Vector3(0.012, sz.y, sz.z)
+			add_child(Props.sbox(skin, "concrete_wall", center + n * (thick * 0.5 + 0.006), Color(0.92, 0.91, 0.88)))
 		if skirting and not is_lintel:
 			var sk: Vector3 = Vector3(seg, 0.06, thick + 0.02) if along_x else Vector3(thick + 0.02, 0.06, seg)
 			add_child(Props.box(sk, C_SKIRTING, Vector3(mid.x, bottom + 0.03, mid.y)))
@@ -190,13 +197,13 @@ func _wall(a: Vector2, b: Vector2, openings: Array = [], thick: float = INT_T, c
 
 func _build_walls() -> void:
 	# Exterior (RC)
-	_wall(Vector2(0, 0), Vector2(6.37, 0), [[0.45, 2.0, DOOR_TOP], [3.3, 5.8, 2.05]], EXT_T)       # balcony side
-	_wall(Vector2(0, 0), Vector2(0, 7.28), [], EXT_T)                                                # west
-	_wall(Vector2(6.37, 0), Vector2(6.37, 5.46), [], EXT_T)                                          # east
-	_wall(Vector2(4.55, 5.46), Vector2(6.37, 5.46), [], EXT_T)                                       # kitchen back / alcove
-	_wall(Vector2(4.55, 5.46), Vector2(4.55, 7.28), [], EXT_T, C_WALLPAPER, GENKAN_Y, CEIL - GENKAN_Y) # closet+genkan / alcove
-	_wall(Vector2(0, 7.28), Vector2(2.73, 7.28), [[0.5, 1.2, 1.9]], EXT_T)                          # bath+toilet / corridor
-	_wall(Vector2(2.73, 7.28), Vector2(4.55, 7.28), [[0.12, 0.97, DOOR_TOP]], EXT_T, C_WALLPAPER, GENKAN_Y, CEIL - GENKAN_Y)
+	_wall(Vector2(0, 0), Vector2(6.37, 0), [[0.45, 2.0, DOOR_TOP], [3.3, 5.8, 2.05]], EXT_T, C_WALLPAPER, 0.0, CEIL, true, -1.0)  # balcony side
+	_wall(Vector2(0, 0), Vector2(0, 7.28), [], EXT_T, C_WALLPAPER, 0.0, CEIL, true, -1.0)  # west
+	_wall(Vector2(6.37, 0), Vector2(6.37, 5.46), [], EXT_T, C_WALLPAPER, 0.0, CEIL, true, 1.0)  # east
+	_wall(Vector2(4.55, 5.46), Vector2(6.37, 5.46), [], EXT_T, C_WALLPAPER, 0.0, CEIL, true, 1.0)  # kitchen back / alcove
+	_wall(Vector2(4.55, 5.46), Vector2(4.55, 7.28), [], EXT_T, C_WALLPAPER, GENKAN_Y, CEIL - GENKAN_Y, true, 1.0)  # closet+genkan / alcove
+	_wall(Vector2(0, 7.28), Vector2(2.73, 7.28), [[0.5, 1.2, 1.9]], EXT_T, C_WALLPAPER, 0.0, CEIL, true, 1.0)  # bath+toilet / corridor
+	_wall(Vector2(2.73, 7.28), Vector2(4.55, 7.28), [[0.12, 0.97, DOOR_TOP]], EXT_T, C_WALLPAPER, GENKAN_Y, CEIL - GENKAN_Y, true, 1.0)
 	# Interior partitions
 	_wall(Vector2(2.73, 0), Vector2(2.73, 3.64), [[0.9, 2.72, DOOR_TOP]])        # bedroom | LDK (引き戸)
 	_wall(Vector2(0, 3.64), Vector2(3.64, 3.64), [[2.83, 3.54, DOOR_TOP]])       # bedroom | washroom, hall → LDK door
@@ -249,6 +256,7 @@ func _door(id: String, label: String, center: Vector3, facing: float, width: flo
 	d.height = DOOR_TOP - center.y
 	d.color = opts.get("color", C_DOOR)
 	d.glass = opts.get("glass", false)
+	d.wood = opts.get("wood", true)
 	d.swing = opts.get("swing", 1.0)
 	d.hinge_left = opts.get("hinge_left", true)
 	d.slide_sign = opts.get("slide_sign", -1.0)
@@ -268,7 +276,7 @@ func _build_doors() -> void:
 	_door("ldk_door", "Living room door", Vector3(3.185, 0, 3.64), FACE_S, 0.71, "hinged", {"glass": true, "swing": 1.0, "open": true})
 	_door("washroom_door", "Washroom door", Vector3(2.73, 0, 4.15), FACE_E, 0.7, "hinged", {"swing": 1.0, "hinge_left": false})
 	_door("toilet_door", "Toilet door", Vector3(2.73, 0, 5.95), FACE_E, 0.7, "hinged", {"swing": -1.0})
-	_door("bath_door", "Bathroom door", Vector3(1.15, 0, 5.46), FACE_S, 0.7, "hinged", {"swing": -1.0, "color": Color(0.88, 0.9, 0.92), "glass": true})
+	_door("bath_door", "Bathroom door", Vector3(1.15, 0, 5.46), FACE_S, 0.7, "hinged", {"swing": -1.0, "color": Color(0.88, 0.9, 0.92), "glass": true, "wood": false})
 	_door("closet_door", "Closet door", Vector3(4.1, 0, 6.37), FACE_S, 0.7, "hinged", {"swing": -1.0})
 
 
@@ -382,8 +390,11 @@ func _build_furniture() -> void:
 	# --- Bedroom (洋室 6畳) ---
 	_utility("bed", "Bed", "bed", Vector3(1.2, 0.45, 1.95), Color(0.85, 0.85, 0.92), Vector3(0.69, 0, 1.13), FACE_S)
 	_hazard("wardrobe", "Wardrobe", "wardrobe", Vector3(0.75, 1.8, 0.55), C_WOOD, Vector3(2.405, 0, 0.5), FACE_W)
-	_clue("phone", "Phone", "side_table", Vector3(0.4, 0.45, 0.4), Color(0.75, 0.6, 0.45), Vector3(1.55, 0, 0.32), FACE_S,
+	var phone = _clue("phone", "Phone", "side_table", Vector3(0.4, 0.45, 0.4), Color(0.75, 0.6, 0.45), Vector3(1.55, 0, 0.32), FACE_S,
 		"Check", [{"clue": "jalert"}], "(no new messages)")
+	phone.buzz = true
+	_deco("alarm_clock", Vector3(0.12, 0.12, 0.08), Color.WHITE, Vector3(1.62, 0.45, 0.24), FACE_S, false)
+	add_child(Props.box(Vector3(0.075, 0.009, 0.155), Color(0.05, 0.05, 0.06), Vector3(1.48, 0.455, 0.4)))  # the phone
 	_loot("bedroom_closet", "Closet", "closet_builtin", Vector3(1.8, 2.0, 0.55), Color(0.93, 0.92, 0.88),
 		Vector3(0.97, 0, 3.315), FACE_N, {"medkits": 1, "materials": 1})
 	# --- LDK ---
@@ -394,8 +405,16 @@ func _build_furniture() -> void:
 		"Use", [{"clue": "forum_rescue", "from": day2, "needs_power": true}], "(the forums won't load yet)")
 	_clue("tv", "TV", "tv_stand", Vector3(1.2, 0.45, 0.4), Color(0.15, 0.15, 0.17), Vector3(6.095, 0, 2.0), FACE_W,
 		"Watch", [{"clue": "tv_shibuya", "needs_power": true}], "(colour bars)")
-	_clue("radio", "Hand-crank radio", "kotatsu", Vector3(0.8, 0.4, 0.8), Color(0.6, 0.42, 0.3), Vector3(4.6, 0, 1.9), FACE_S,
+	var radio = _clue("radio", "Hand-crank radio", "kotatsu", Vector3(0.8, 0.4, 0.8), Color(0.6, 0.42, 0.3), Vector3(4.6, 0, 1.9), FACE_S,
 		"Listen to", [{"clue": "radio_sound", "night_only": true}], "(static... maybe at night)")
+	radio.night_static = true
+	_deco("laptop", Vector3(0.34, 0.26, 0.26), Color.WHITE, Vector3(6.06, 0.72, 0.55), FACE_W, false)
+	_deco("desk_lamp", Vector3(0.3, 0.45, 0.25), Color.WHITE, Vector3(6.12, 0.72, 0.95), FACE_W, false)
+	_deco("cardboard_box", Vector3(0.45, 0.4, 0.4), Color.WHITE, Vector3(6.0, 0, 0.5), FACE_W, false)
+	_deco("television", Vector3(1.0, 0.68, 0.25), Color.WHITE, Vector3(6.12, 0.45, 2.0), FACE_W, false)
+	_deco("binoculars", Vector3(0.2, 0.1, 0.16), Color.WHITE, Vector3(5.45, 0.6, 0.35), FACE_N, false)
+	_deco("plant", Vector3(0.45, 1.1, 0.45), Color.WHITE, Vector3(6.05, 0, 3.15), FACE_W)
+	_deco("wall_clock", Vector3(0.3, 0.3, 0.06), Color.WHITE, Vector3(2.8, 2.05, 1.8), FACE_E, false)
 	_deco("dining_table", Vector3(0.75, 0.7, 0.75), C_WOOD, Vector3(4.2, 0, 3.05), FACE_S)
 	_deco("dining_chair", Vector3(0.42, 0.85, 0.42), C_WOOD, Vector3(4.2, 0, 2.5), FACE_S)
 	_deco("ac_indoor", Vector3(0.8, 0.28, 0.25), Color(0.95, 0.95, 0.95), Vector3(4.55, 2.08, 0.2), FACE_S, false)
@@ -411,6 +430,12 @@ func _build_furniture() -> void:
 	fridge.spoils_without_power = true
 	_deco("range_hood", Vector3(0.65, 0.45, 0.5), Color(0.85, 0.85, 0.85), Vector3(5.325, 1.85, 5.13), FACE_N, false)
 	_deco("wall_cabinet", Vector3(1.3, 0.6, 0.35), Color(0.85, 0.84, 0.8), Vector3(4.35, 1.6, 5.2), FACE_N, false)
+	add_child(Props.sbox(Vector3(1.95, 0.75, 0.01), "tile_white", Vector3(4.675, 1.23, 5.378)))  # splashback
+	_deco("kettle", Vector3(0.22, 0.26, 0.18), Color.WHITE, Vector3(3.95, 0.85, 5.05), FACE_N, false)
+	_deco("food_cans", Vector3(0.26, 0.12, 0.16), Color.WHITE, Vector3(4.15, 0.85, 4.95), FACE_N, false)
+	_deco("water_jug", Vector3(0.28, 0.32, 0.28), Color.WHITE, Vector3(6.15, 0, 4.0), FACE_W)
+	_deco("water_jug", Vector3(0.28, 0.32, 0.28), Color.WHITE, Vector3(6.15, 0, 3.7), FACE_W)
+	_deco("trashbag", Vector3(0.45, 0.55, 0.45), Color.WHITE, Vector3(3.92, 0, 4.0), FACE_N)
 	# --- Washroom (洗面脱衣所) & unit bath ---
 	_loot("vanity", "Washbasin cabinet", "vanity", Vector3(0.75, 1.8, 0.5), Color(0.92, 0.92, 0.92),
 		Vector3(0.325, 0, 4.1), FACE_E, {"medkits": 1})
@@ -431,6 +456,7 @@ func _build_furniture() -> void:
 		{"materials": 1})
 	_clue("mail", "Mail on the floor", "mail_pile", Vector3(0.3, 0.04, 0.22), Color(0.92, 0.9, 0.85), Vector3(3.0, g, 6.95), FACE_N,
 		"Pick up", [{"clue": "building_notice"}, {"clue": "neighbor_note", "from": day2}], "(nothing new)")
+	_deco("boots", Vector3(0.3, 0.38, 0.3), Color.WHITE, Vector3(4.35, GENKAN_Y, 6.6), FACE_W, false)
 	_deco("intercom", Vector3(0.18, 0.13, 0.04), Color(0.95, 0.95, 0.95), Vector3(3.75, 1.35, 3.57), FACE_N, false)
 	_deco("breaker_panel", Vector3(0.35, 0.3, 0.1), Color(0.95, 0.95, 0.93), Vector3(2.79, 1.85, 5.05), FACE_E, false)
 
@@ -497,7 +523,9 @@ func _build_skyline() -> void:
 		var d := rng.randf_range(6, 12)
 		var h := rng.randf_range(9, 20) if near else rng.randf_range(15, 60)
 		var tone := rng.randf_range(0.5, 0.72) if near else rng.randf_range(0.3, 0.45)
-		add_child(Props.box(Vector3(w, h, d), Color(tone, tone * 0.98, tone * 0.95), Vector3(x, -9.2 + h * 0.5, z)))
+		var bld := Props.box(Vector3(w, h, d), Color(tone, tone, tone), Vector3(x, -9.2 + h * 0.5, z))
+		bld.material_override = Props.surface("concrete_wall", Color(tone * 1.2, tone * 1.18, tone * 1.12), true, 2.0)
+		add_child(bld)
 		var face_z := z + d * 0.5 + 0.05 if north else z - d * 0.5 - 0.05
 		# Rows of windows / balconies.
 		var floors := int(h / 2.9)

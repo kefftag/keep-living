@@ -8,6 +8,26 @@ var verb := "Check"
 var entries: Array = []
 var idle_status := "(nothing new)"
 var seen_this_run: Array = []
+var buzz := false         # phone: buzzes until checked
+var night_static := false # radio: static hiss at night
+var _buzz_t := 1.0
+var _static: AudioStreamPlayer3D
+
+
+func _process(delta: float) -> void:
+	if not Game.is_alive_phase():
+		return
+	if buzz and _next_clue() != "" and seen_this_run.is_empty():
+		_buzz_t -= delta
+		if _buzz_t <= 0.0:
+			_buzz_t = 4.0
+			Sfx.play("phone_buzz", global_position + Vector3(0, 0.5, 0), -6.0, 0.0)
+	if night_static:
+		var want := Game.phase == Game.Phase.NIGHT
+		if want and not is_instance_valid(_static):
+			_static = Sfx.loop_on("radio_static", self, -16.0, Vector3(0, 0.45, 0))
+		elif not want and is_instance_valid(_static):
+			_static.queue_free()
 
 
 func _available() -> Array:

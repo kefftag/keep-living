@@ -30,6 +30,14 @@ godot --headless --path . -- --smoke-test
 
 `--shots=/abs/dir` (non-headless, e.g. under `xvfb-run`) saves screenshots.
 
+## Art & sound
+- Model lookup per prop name: `assets/models/<name>/<name>.gltf` (Poly Haven scan, fitted to the
+  prop's box) → `assets/models/<name>.glb` (Blender kit, used as authored, `kl_*` materials get
+  textured) → grey box. See `scripts/world/props.gd`.
+- Surfaces: `Props.surface("floor_wood")` etc., triplanar PBR from `assets/textures/`.
+- Sound: `Sfx.play(name, pos)` / `Sfx.loop_on(name, node)`; names map to `assets/audio/<name>[_N].wav`.
+- Blender MCP setup and first prompts: `docs/BLENDER_MCP_SETUP.md`.
+
 ## Models
 `assets/models/<name>.glb` replaces the grey box with the same name. Front = Blender −Y,
 origin bottom-centre, metres, sizes from the table in `docs/BLENDER_PIPELINE.md`.

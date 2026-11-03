@@ -5,6 +5,22 @@ extends "res://scripts/world/interactable.gd"
 
 var kind := ""  # stove | tap | bathtub | bed
 var water_plane: MeshInstance3D
+var _hiss: AudioStreamPlayer3D
+
+
+func _process(_delta: float) -> void:
+	if kind != "stove":
+		return
+	if Game.gas_leaking and not is_instance_valid(_hiss):
+		_hiss = Sfx.loop_on("gas_hiss", self, -8.0, Vector3(0, 0.95, 0))
+	elif not Game.gas_leaking and is_instance_valid(_hiss):
+		_hiss.queue_free()
+
+
+func get_hold_sound(_alt: bool) -> String:
+	if kind == "tap" or (kind == "bathtub" and Game.bathtub_water <= 0):
+		return "water_pour"
+	return ""
 
 
 func _build() -> void:

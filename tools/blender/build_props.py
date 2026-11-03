@@ -238,9 +238,6 @@ def desk():
     p.box((0.85, 0.5, 0.03), (0, 0, 0.69), "wood_light")
     for x in (-0.4, 0.4):
         p.box((0.03, 0.46, 0.69), (x, 0, 0), "steel")
-    p.box((0.32, 0.22, 0.016), (0, -0.04, 0.72), "plastic_grey")
-    p.box((0.32, 0.01, 0.21), (0, 0.075, 0.736), "plastic_grey", rot=(-12, 0, 0))
-    p.box((0.29, 0.004, 0.18), (0, 0.068, 0.75), "screen", rot=(-12, 0, 0))
     p.box((0.1, 0.1, 0.11), (0.3, 0.12, 0.72), "porcelain")  # mug
     return p
 
@@ -304,10 +301,6 @@ def tv_stand():
     p.box((1.2, 0.4, 0.38), (0, 0, 0.07), "wood_dark")
     for x in (-0.55, 0.55):
         p.box((0.05, 0.35, 0.07), (x, 0, 0), "black")
-    p.box((0.3, 0.18, 0.02), (0, 0.05, 0.45), "black")
-    p.box((0.04, 0.04, 0.1), (0, 0.05, 0.47), "black")
-    p.box((0.98, 0.05, 0.58), (0, 0.05, 0.55), "black")
-    p.box((0.95, 0.01, 0.55), (0, 0.022, 0.565), "glass_dark")
     return p
 
 
@@ -328,8 +321,6 @@ def binocular_stand():
     p.cyl(0.18, 0.04, (0, 0, 0.56), "wood_light")
     p.cyl(0.03, 0.54, (0, 0, 0.27), "wood")
     p.cyl(0.14, 0.03, (0, 0, 0.015), "wood")
-    for x in (-0.045, 0.045):
-        p.cyl(0.035, 0.14, (x, 0, 0.62), "black", axis="Y")
     return p
 
 
@@ -541,15 +532,15 @@ def zombie():
 
 
 BUILDERS = {
-    "bed": bed, "wardrobe": wardrobe, "bookshelf": bookshelf, "side_table": side_table,
+    "bed": bed, "wardrobe": wardrobe, "bookshelf": bookshelf,
     "closet_builtin": closet_builtin, "desk": desk, "kitchen_cabinet": kitchen_cabinet,
     "kitchen_sink": kitchen_sink, "gas_stove": gas_stove, "fridge": fridge, "tv_stand": tv_stand,
     "kotatsu": kotatsu, "binocular_stand": binocular_stand, "vanity": vanity,
     "washing_machine": washing_machine, "bathtub": bathtub, "toilet": toilet,
-    "storage_shelf": storage_shelf, "emergency_bag": emergency_bag, "toolbox": toolbox,
+    "emergency_bag": emergency_bag,
     "shoe_cabinet": shoe_cabinet, "mail_pile": mail_pile, "dining_table": dining_table,
-    "dining_chair": dining_chair, "range_hood": range_hood, "wall_cabinet": wall_cabinet,
-    "ac_indoor": ac_indoor, "ac_outdoor": ac_outdoor, "curtain": curtain, "intercom": intercom,
+    "range_hood": range_hood, "wall_cabinet": wall_cabinet,
+    "ac_indoor": ac_indoor, "curtain": curtain, "intercom": intercom,
     "breaker_panel": breaker_panel, "zombie": zombie,
 }
 

@@ -21,6 +21,13 @@ var pivot: Node3D
 var flash_t := 0.0
 var body_mat: StandardMaterial3D
 var anim_t := 0.0
+var body: Node3D           # the visible body, under pivot, for twitches
+var groan_t := 0.0
+var lunge_t := 0.0
+var lunge_cd := 0.0
+var twitch_t := 0.0
+var twitch := Vector3.ZERO
+var shrieked := false
 
 
 func setup(target_point, player_ref: Node3D, night_number: int, slot_index: int) -> void:
@@ -48,7 +55,8 @@ func _ready() -> void:
 	pivot = Node3D.new()
 	add_child(pivot)
 	if Props.has_model("zombie"):
-		pivot.add_child(Props.visual("zombie", Vector3(0.5, 1.7, 0.3), Color.WHITE))
+		body = Props.visual("zombie", Vector3(0.5, 1.7, 0.3), Color.WHITE)
+		pivot.add_child(body)
 	else:
 		body_mat = StandardMaterial3D.new()
 		body_mat.albedo_color = Color(0.42, 0.5, 0.4).lerp(Color(0.5, 0.4, 0.4), randf())
@@ -64,6 +72,16 @@ func _ready() -> void:
 			var arm_mesh := Props.box(Vector3(0.09, 0.09, 0.55), Color(0.55, 0.6, 0.5), Vector3(0.2 * side, 1.15, 0.3))
 			pivot.add_child(arm_mesh)
 		pivot.add_child(Props.box(Vector3(0.3, 0.08, 0.1), Color(0.6, 0.1, 0.1), Vector3(0, 1.32, 0.22)))  # eyes
+
+	# Eyes: pale, faintly glowing, so they catch your phone light in the dark.
+	for side in [-1, 1]:
+		var eye := Props.box(Vector3(0.035, 0.02, 0.02), Color(0.95, 0.92, 0.75), Vector3(0.045 * side, 1.47, 0.16), 2.5)
+		(body if body != null else pivot).add_child(eye)
+	pivot.rotation.x = 0.0
+	if body == null:
+		body = pivot
+	groan_t = randf_range(1.0, 6.0)
+	lunge_cd = randf_range(1.5, 4.0)
 
 	nav = NavigationAgent3D.new()
 	nav.path_desired_distance = 0.35
@@ -86,6 +104,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 	attack_cd = max(0.0, attack_cd - delta)
 	anim_t += delta
+	_animate(delta)
 	if flash_t > 0.0:
 		flash_t -= delta
 		if body_mat:
@@ -129,8 +148,35 @@ func _physics_process(delta: float) -> void:
 					attack_cd = 1.1
 					Game.damage(bite, "Torn apart by the infected on night %d." % Game.day if Game.phase == Game.Phase.NIGHT else "Bitten by one of the infected that got inside.")
 			else:
-				_move_towards(player.global_position, speed * 1.15 * day_slow, delta)
+				if not shrieked:
+					shrieked = true
+					Sfx.play("shriek", global_position + Vector3(0, 1.5, 0), 0.0, 0.15)
+				# Close in, then lunge: a sudden burst of speed with a shriek.
+				lunge_cd -= delta
+				if lunge_t <= 0.0 and lunge_cd <= 0.0 and to.length() < 4.0:
+					lunge_t = 0.7
+					lunge_cd = randf_range(3.5, 7.0)
+					Sfx.play("shriek", global_position + Vector3(0, 1.5, 0), 3.0, 0.2)
+				var burst := 2.3 if lunge_t > 0.0 else 1.15
+				lunge_t -= delta
+				_move_towards(player.global_position, speed * burst * day_slow, delta)
 	move_and_slide()
+
+
+## Hunched, twitchy body language and the occasional groan.
+func _animate(delta: float) -> void:
+	groan_t -= delta
+	if groan_t <= 0.0:
+		groan_t = randf_range(3.0, 8.0) if state != State.HUNT else randf_range(1.5, 4.0)
+		Sfx.play("groan", global_position + Vector3(0, 1.5, 0), -1.0, 0.15, 22.0)
+	twitch_t -= delta
+	if twitch_t <= 0.0:
+		twitch_t = randf_range(0.4, 2.2)
+		twitch = Vector3(randf_range(-0.35, 0.25), randf_range(-0.5, 0.5), randf_range(-0.3, 0.3))
+	twitch = twitch.lerp(Vector3.ZERO, 1.0 - exp(-9.0 * delta))
+	var lean := 0.32 if lunge_t > 0.0 else 0.18  # hunched forward, more when lunging
+	if body != pivot and is_instance_valid(body):
+		body.rotation = Vector3(lean + twitch.x + sin(anim_t * 2.1) * 0.04, twitch.y, twitch.z + sin(anim_t * 1.3) * 0.06)
 
 
 func _flat(v: Vector3) -> Vector3:

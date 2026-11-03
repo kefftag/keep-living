@@ -34,6 +34,7 @@ var panes: Array = []      # glass / door leaf meshes that vanish when breached
 var shards: Node3D
 var planks: Array = []
 var shape_node: CollisionShape3D
+var _next_bang := 0.0
 
 
 func _ready() -> void:
@@ -54,7 +55,7 @@ func _build() -> void:
 	var w := size.x
 	var top := opening_height
 	if sill > 0.0:
-		_frame_box(visual, Vector3(w, sill, 0.15), Vector3(0, sill * 0.5, 0), C_WALL)
+		visual.add_child(Props.sbox(Vector3(w, sill, 0.15), "wallpaper", Vector3(0, sill * 0.5, 0)))
 	var h := top - sill
 	match style:
 		"door":
@@ -108,7 +109,7 @@ func _build() -> void:
 	# Boards nailed across the inside face, 2 per reinforcement level.
 	for i in MAX_LEVEL * 2:
 		var y := sill + 0.15 + (h - 0.3) * (float(i) / float(MAX_LEVEL * 2 - 1))
-		var plank := Props.box(Vector3(w + 0.2, 0.14, 0.03), Color(0.62, 0.46, 0.3), Vector3(0, y, -0.11))
+		var plank := Props.sbox(Vector3(w + 0.2, 0.14, 0.03), "wood", Vector3(0, y, -0.11), Color(0.95, 0.9, 0.85), false)
 		plank.rotation.z = 0.06 if i % 2 == 0 else -0.06
 		plank.visible = false
 		visual.add_child(plank)
@@ -141,6 +142,9 @@ func take_damage(amount: float) -> void:
 		return
 	hp -= amount
 	last_hit_time = Game.run_time
+	if Game.run_time >= _next_bang:
+		_next_bang = Game.run_time + randf_range(0.55, 1.3)
+		Sfx.play("bang_door" if style == "door" else "bang_glass", global_position + Vector3(0, 1.2, 0), 2.0, 0.1, 30.0)
 	if hp <= 0.0:
 		hp = 0.0
 		_break_open()
@@ -152,6 +156,8 @@ func _break_open() -> void:
 	level = 0
 	max_hp = base_hp
 	collision_layer = LAYER_BREACHED
+	Sfx.play("door_break" if style == "door" else "glass_break", global_position + Vector3(0, 1.2, 0), 4.0, 0.05, 40.0)
+	Sfx.play("shriek", global_position + outward() * 0.6 + Vector3(0, 1.5, 0), 0.0, 0.1, 40.0)
 	Game.say("The %s has given way! They're getting in!" % display_name.to_lower(), "danger")
 	Game.shake.emit(0.6, 0.5)
 	Game.make_noise(global_position, 10.0)
@@ -207,6 +213,10 @@ func get_duration(alt: bool) -> float:
 	if alt or level >= MAX_LEVEL:
 		return 2.0
 	return 3.0
+
+
+func get_hold_sound(_alt: bool) -> String:
+	return "hammer"
 
 
 func get_noise(_alt: bool) -> float:
