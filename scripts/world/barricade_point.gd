@@ -8,13 +8,20 @@ signal breached(point)
 const REINFORCE_HP := 100.0
 const MAX_LEVEL := 3
 const REBOARD_COST := 3
-const CUT_HEIGHT := 1.25  # visuals are sliced like the walls (dollhouse view)
+const LAYER_INTACT := 2
+const LAYER_BREACHED := 32  # nothing collides with it, but the player's look-ray still finds it
+
+const C_SASH := Color(0.62, 0.63, 0.62)     # aluminium window frames
+const C_GLASS := Color(0.75, 0.86, 0.92, 0.14)
+const C_FROSTED := Color(0.85, 0.88, 0.9, 0.7)
+const C_STEEL_DOOR := Color(0.36, 0.33, 0.3)
+const C_WALL := Color(0.9, 0.89, 0.86)
 
 var point_id := ""
 var base_hp := 100.0
-var opening_height := 2.1
+var opening_height := 2.0  # top of the opening above this node's floor
 var sill := 0.0
-var is_door := false
+var style := "window"      # door | window | balcony | barred
 var spawn_origins: Array = []  # world positions where attackers appear
 
 var level := 0
@@ -23,7 +30,8 @@ var hp := 100.0
 var broken := false
 var last_hit_time := -100.0
 
-var panel: MeshInstance3D
+var panes: Array = []      # glass / door leaf meshes that vanish when breached
+var shards: Node3D
 var planks: Array = []
 var shape_node: CollisionShape3D
 
@@ -33,33 +41,79 @@ func _ready() -> void:
 	max_hp = base_hp
 	hp = base_hp
 	super._ready()
-	collision_layer = 2
+	collision_layer = LAYER_INTACT
+
+
+func _frame_box(parent: Node3D, sz: Vector3, pos: Vector3, c: Color = C_SASH) -> void:
+	parent.add_child(Props.box(sz, c, pos))
 
 
 func _build() -> void:
 	visual = Node3D.new()
 	add_child(visual)
 	var w := size.x
-	var top: float = min(opening_height, CUT_HEIGHT)
+	var top := opening_height
 	if sill > 0.0:
-		visual.add_child(Props.box(Vector3(w, sill, 0.16), Color(0.82, 0.8, 0.76), Vector3(0, sill * 0.5, 0)))
-	var panel_h: float = max(top - sill, 0.1)
-	var panel_color := Color(0.45, 0.47, 0.5) if is_door else Color(0.55, 0.75, 0.85, 0.55)
-	panel = Props.box(Vector3(w - 0.08, panel_h, 0.05), panel_color, Vector3(0, sill + panel_h * 0.5, 0))
-	visual.add_child(panel)
-	# Frame
-	var frame_c := Color(0.25, 0.25, 0.27)
-	visual.add_child(Props.box(Vector3(0.06, top, 0.12), frame_c, Vector3(-w * 0.5 + 0.03, top * 0.5, 0)))
-	visual.add_child(Props.box(Vector3(0.06, top, 0.12), frame_c, Vector3(w * 0.5 - 0.03, top * 0.5, 0)))
-	# Boards, shown per reinforcement level (2 per level), on the inside face.
+		_frame_box(visual, Vector3(w, sill, 0.15), Vector3(0, sill * 0.5, 0), C_WALL)
+	var h := top - sill
+	match style:
+		"door":
+			# Steel apartment door (opens outward), lever, peephole, door guard, mail slot.
+			_frame_box(visual, Vector3(w, 0.05, 0.16), Vector3(0, top - 0.025, 0), Color(0.3, 0.3, 0.3))
+			var leaf := Props.box(Vector3(w - 0.06, h - 0.06, 0.05), C_STEEL_DOOR, Vector3(0, sill + h * 0.5, 0.02))
+			visual.add_child(leaf)
+			panes.append(leaf)
+			for part in [
+				[Vector3(0.14, 0.025, 0.03), Vector3(-w * 0.5 + 0.13, 1.0, -0.03), Color(0.75, 0.75, 0.75)],  # lever
+				[Vector3(0.03, 0.03, 0.02), Vector3(0, 1.48, -0.01), Color(0.1, 0.1, 0.1)],                  # peephole
+				[Vector3(0.05, 0.22, 0.03), Vector3(-w * 0.5 + 0.06, 1.35, -0.03), Color(0.7, 0.7, 0.72)],     # door guard
+				[Vector3(0.28, 0.06, 0.02), Vector3(0, 0.75, -0.01), Color(0.2, 0.2, 0.2)],                  # mail slot
+			]:
+				var m := Props.box(part[0], part[2], part[1])
+				leaf.add_child(m)
+				m.position -= leaf.position
+		"balcony", "window", "barred":
+			# Aluminium sash with two sliding panes.
+			_frame_box(visual, Vector3(w, 0.05, 0.12), Vector3(0, sill + 0.025, 0))
+			_frame_box(visual, Vector3(w, 0.05, 0.12), Vector3(0, top - 0.025, 0))
+			_frame_box(visual, Vector3(0.05, h, 0.12), Vector3(-w * 0.5 + 0.025, sill + h * 0.5, 0))
+			_frame_box(visual, Vector3(0.05, h, 0.12), Vector3(w * 0.5 - 0.025, sill + h * 0.5, 0))
+			var glass_c := C_FROSTED if style == "barred" else C_GLASS
+			for i in 2:
+				var px := (-0.25 + 0.5 * i) * (w - 0.1)
+				var pane := Props.box(Vector3((w - 0.1) * 0.5, h - 0.1, 0.012), glass_c, Vector3(px, sill + h * 0.5, -0.02 + 0.03 * i))
+				visual.add_child(pane)
+				panes.append(pane)
+				_frame_box(pane, Vector3(0.03, h - 0.1, 0.03), Vector3((w - 0.1) * 0.25 - 0.015, 0, 0))
+				_frame_box(pane, Vector3(0.03, h - 0.1, 0.03), Vector3(-(w - 0.1) * 0.25 + 0.015, 0, 0))
+			if style == "barred":
+				# 面格子: the iron grille outside a corridor-facing bathroom window.
+				for i in 7:
+					var bx := -w * 0.5 + 0.06 + (w - 0.12) * float(i) / 6.0
+					_frame_box(visual, Vector3(0.025, h + 0.1, 0.025), Vector3(bx, sill + h * 0.5, 0.14), Color(0.25, 0.25, 0.27))
+				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, sill + 0.02, 0.14), Color(0.25, 0.25, 0.27))
+				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, top - 0.02, 0.14), Color(0.25, 0.25, 0.27))
+	# Broken glass / a bent door, shown once breached.
+	shards = Node3D.new()
+	shards.visible = false
+	visual.add_child(shards)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(point_id)
+	for i in 6:
+		var shard := Props.box(Vector3(rng.randf_range(0.05, 0.2), rng.randf_range(0.1, 0.35), 0.01),
+			C_STEEL_DOOR if style == "door" else C_GLASS,
+			Vector3(rng.randf_range(-w * 0.45, w * 0.45), sill + rng.randf_range(0.0, h), rng.randf_range(-0.03, 0.03)))
+		shard.rotation.z = rng.randf_range(-1.0, 1.0)
+		shards.add_child(shard)
+	# Boards nailed across the inside face, 2 per reinforcement level.
 	for i in MAX_LEVEL * 2:
-		var y := sill + 0.12 + (panel_h - 0.24) * (float(i) / float(MAX_LEVEL * 2 - 1))
-		var plank := Props.box(Vector3(w + 0.1, 0.12, 0.04), Color(0.55, 0.38, 0.22), Vector3(0, y, -0.08))
-		plank.rotation.z = 0.08 if i % 2 == 0 else -0.08
+		var y := sill + 0.15 + (h - 0.3) * (float(i) / float(MAX_LEVEL * 2 - 1))
+		var plank := Props.box(Vector3(w + 0.2, 0.14, 0.03), Color(0.62, 0.46, 0.3), Vector3(0, y, -0.11))
+		plank.rotation.z = 0.06 if i % 2 == 0 else -0.06
 		plank.visible = false
 		visual.add_child(plank)
 		planks.append(plank)
-	shape_node = Props.box_shape(Vector3(w, 2.6, 0.2), Vector3(0, 1.3, 0))
+	shape_node = Props.box_shape(Vector3(w, 2.4, 0.2), Vector3(0, 1.2, 0))
 	add_child(shape_node)
 
 
@@ -97,7 +151,7 @@ func _break_open() -> void:
 	broken = true
 	level = 0
 	max_hp = base_hp
-	shape_node.disabled = true
+	collision_layer = LAYER_BREACHED
 	Game.say("The %s has given way! They're getting in!" % display_name.to_lower(), "danger")
 	Game.shake.emit(0.6, 0.5)
 	Game.make_noise(global_position, 10.0)
@@ -105,16 +159,11 @@ func _break_open() -> void:
 
 
 func _refresh_visual() -> void:
-	panel.visible = not broken
+	for p in panes:
+		p.visible = not broken
+	shards.visible = broken
 	for i in planks.size():
 		planks[i].visible = not broken and i < level * 2
-	var t: float = clamp(hp / max_hp, 0.0, 1.0)
-	var base_color := Color(0.45, 0.47, 0.5) if is_door else Color(0.55, 0.75, 0.85, 0.55)
-	var m := StandardMaterial3D.new()
-	m.albedo_color = base_color.lerp(Color(0.8, 0.15, 0.1, base_color.a), 1.0 - t)
-	if base_color.a < 1.0:
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	panel.material_override = m
 
 
 func _zombie_blocking() -> bool:
@@ -172,7 +221,7 @@ func perform(alt: bool) -> void:
 		if not Game.spend_materials(REBOARD_COST):
 			return
 		broken = false
-		shape_node.disabled = false
+		collision_layer = LAYER_INTACT
 		hp = base_hp
 		max_hp = base_hp
 		Game.say("You board up the %s." % display_name.to_lower(), "good")

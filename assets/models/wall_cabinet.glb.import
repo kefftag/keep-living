@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bnq13seaa7iiv"
-path="res://.godot/imported/medicine_cabinet.glb-ec78eb5ec54b50a72685ed48e36a24d3.scn"
+uid="uid://dbw1rqm2cq6vc"
+path="res://.godot/imported/wall_cabinet.glb-8a1f38b6c87188dd80ef22622958c447.scn"
 
 [deps]
 
-source_file="res://assets/models/medicine_cabinet.glb"
-dest_files=["res://.godot/imported/medicine_cabinet.glb-ec78eb5ec54b50a72685ed48e36a24d3.scn"]
+source_file="res://assets/models/wall_cabinet.glb"
+dest_files=["res://.godot/imported/wall_cabinet.glb-8a1f38b6c87188dd80ef22622958c447.scn"]
 
 [params]
 

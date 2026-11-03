@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bk1rbqh36esyb"
-path="res://.godot/imported/drawer_chest.glb-c1f351c392c5e58470c6cd2f39877943.scn"
+uid="uid://d607nammewhb"
+path="res://.godot/imported/curtain.glb-b82fa8d74f0c8514e8c34273389914b6.scn"
 
 [deps]
 
-source_file="res://assets/models/drawer_chest.glb"
-dest_files=["res://.godot/imported/drawer_chest.glb-c1f351c392c5e58470c6cd2f39877943.scn"]
+source_file="res://assets/models/curtain.glb"
+dest_files=["res://.godot/imported/curtain.glb-b82fa8d74f0c8514e8c34273389914b6.scn"]
 
 [params]
 

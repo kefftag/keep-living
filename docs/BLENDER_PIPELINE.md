@@ -17,43 +17,52 @@ Every model, generated or hand-made, must follow these rules:
   the game treats as "front". Tall furniture falls toward its front.
 - **Export:** glTF binary (`.glb`), +Y up, apply modifiers, one prop per file,
   filename = model name.
-- **Height cap for wall-side items:** walls are drawn sliced at **1.25 m** so
-  the camera can see in. Anything much taller than that will poke out of the
-  cut-away (tall furniture does, which is intentional: it's a hazard).
-- Keep it low-poly with flat colours (materials → glTF base colour). No textures
-  needed yet.
+- **It's seen up close in first person.** Detail matters at eye level (1.55 m):
+  handles, seams, switches, labels. Textures and bevels are welcome now; keep
+  each prop reasonable (a few thousand tris) and the .glb under ~2 MB.
 
 ## Prop table
 
-`W × H × D` = Blender `X × Z × Y`.
+`W × H × D` = Blender `X × Z × Y`. Sizes follow real Japanese fittings
+(85 cm kitchen counters, a semi-double bed, a 1216-ish unit bath).
 
 | Model name | W × H × D (m) | In game |
 | --- | --- | --- |
-| `bed` | 1.4 × 0.45 × 2.0 | futon bed (rest) |
-| `wardrobe` | 1.0 × 1.9 × 0.6 | hazard, falls forward |
-| `bookshelf` | 1.0 × 1.9 × 0.45 | hazard, falls forward |
+| `bed` | 1.2 × 0.45 × 1.95 | bed (rest). Head end is the back (+Y) |
+| `wardrobe` | 0.75 × 1.8 × 0.55 | hazard, falls forward across the bed head |
+| `bookshelf` | 0.8 × 1.8 × 0.3 | hazard, falls forward |
 | `side_table` | 0.4 × 0.45 × 0.4 | phone (clue) |
-| `drawer_chest` | 1.0 × 0.9 × 0.5 | loot |
-| `desk` | 0.9 × 0.72 × 0.55 | laptop (clue) |
-| `kitchen_cabinet` | 1.0 × 0.9 × 0.55 | loot |
-| `kitchen_sink` | 0.7 × 0.9 × 0.55 | water |
-| `gas_stove` | 0.7 × 0.9 × 0.55 | gas main + cooking |
-| `fridge` | 0.7 × 1.8 × 0.65 | loot (spoils) |
-| `tv_stand` | 1.2 × 0.55 × 0.4 | TV (clue) |
-| `kotatsu` | 0.9 × 0.4 × 0.9 | radio (clue) |
+| `closet_builtin` | 1.8 × 2.0 × 0.55 | クローゼット, loot |
+| `desk` | 0.85 × 0.72 × 0.5 | laptop (clue) |
+| `kitchen_cabinet` | 0.6 × 0.85 × 0.65 | loot |
+| `kitchen_sink` | 0.7 × 0.85 × 0.65 | water |
+| `gas_stove` | 0.65 × 0.85 × 0.65 | gas cock + cooking |
+| `fridge` | 0.6 × 1.6 × 0.62 | loot (spoils), microwave on top |
+| `tv_stand` | 1.2 × 0.45 × 0.4 | TV (clue) |
+| `kotatsu` | 0.8 × 0.4 × 0.8 | hand-crank radio (clue) |
 | `binocular_stand` | 0.4 × 0.6 × 0.4 | binoculars (clue) |
-| `bathtub` | 1.6 × 0.55 × 0.75 | water storage |
-| `medicine_cabinet` | 0.6 × 1.0 × 0.35 | loot |
-| `toilet` | 0.45 × 0.8 × 0.7 | loot (shelf) |
-| `storage_closet` | 1.2 × 1.6 × 0.5 | loot |
+| `vanity` | 0.75 × 1.8 × 0.5 | 洗面化粧台, loot |
+| `washing_machine` | 0.6 × 1.0 × 0.6 | top-loader on its pan (decor) |
+| `bathtub` | 1.7 × 0.55 × 0.7 | water storage |
+| `toilet` | 0.45 × 0.8 × 0.7 | loot (shelf above) |
+| `storage_shelf` | 0.8 × 1.8 × 0.35 | loot |
 | `emergency_bag` | 0.45 × 0.35 × 0.3 | loot + clue |
-| `toolbox` | 0.5 × 0.25 × 0.3 | loot |
-| `shoe_cabinet` | 1.2 × 1.0 × 0.4 | loot |
-| `mail_slot` | 0.35 × 1.0 × 0.12 | clues |
-| `dining_chair` | 0.45 × 0.85 × 0.45 | decoration |
-| `washing_machine` | 0.6 × 0.85 × 0.6 | decoration |
-| `player` | ~0.5 × 1.6 × 0.3 | the survivor (the swing arm and bat are added in code) |
-| `zombie` | ~0.5 × 1.7 × 0.3 | the infected |
+| `toolbox` | 0.4 × 0.22 × 0.25 | loot |
+| `shoe_cabinet` | 0.75 × 0.9 × 0.35 | 下駄箱, loot |
+| `mail_pile` | 0.3 × 0.04 × 0.22 | mail through the door slot (clues) |
+| `dining_table` | 0.75 × 0.7 × 0.75 | decor |
+| `dining_chair` | 0.42 × 0.85 × 0.42 | decor |
+| `range_hood` | 0.65 × 0.45 × 0.5 | decor, wall-mounted at 1.85 m |
+| `wall_cabinet` | 1.3 × 0.6 × 0.35 | decor, wall-mounted at 1.6 m |
+| `ac_indoor` | 0.8 × 0.28 × 0.25 | decor, wall-mounted at 2.08 m |
+| `ac_outdoor` | 0.7 × 0.55 × 0.28 | decor, on the balcony |
+| `curtain` | 0.35 × 2.0 × 0.08 | decor |
+| `intercom` | 0.18 × 0.13 × 0.04 | decor, wall-mounted at 1.35 m |
+| `breaker_panel` | 0.35 × 0.3 × 0.1 | decor, wall-mounted at 1.85 m |
+| `zombie` | ~0.5 × 1.7 × 0.3 | the infected (collision radius 0.2 m) |
+
+Interior doors take a model too: the door's `model_name` (unset by default) at
+`width × (2.0 − floor) × 0.035`, with the origin at the bottom-centre of the leaf.
 
 The sizes live in `scripts/world/apartment.gd` (`_build_furniture`). Change both
 places together.
@@ -94,8 +103,12 @@ Asset sources (Poly Haven, Sketchfab, Hyper3D/Rodin via blender-mcp) are fine
 as long as the result follows the contract. Check licences before committing.
 
 ## Not modelled (yet)
-- **Entrances** (doors/windows) are drawn in code because they're sliced at the
-  cut-away height and show damage, boards and breaches procedurally.
-- **Walls/floors** are generated from the layout in `apartment.gd`. A future
-  pass could export an `apartment_shell.glb` with proper door frames, skirting,
-  tatami and tiles, with collision staying in code.
+- **Entrances** (front door, windows) are drawn in code because they show
+  damage, boards and breaches procedurally.
+- **Walls/floors/ceiling** are generated from the floor plan in `apartment.gd`
+  (910 mm module, 2.4 m ceilings). The biggest realism win now is an
+  `apartment_shell.glb` from Blender: door frames (枠), wallpaper texture,
+  flooring planks, genkan tile, unit-bath panels, switches and sockets, with
+  collision staying in code. Build it on the same coordinates
+  (Godot +X = Blender +X, Godot +Z = Blender −Y, origin at the interior's
+  north-west corner).

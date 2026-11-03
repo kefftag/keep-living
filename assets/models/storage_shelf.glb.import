@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bxhnyb4f57ubs"
-path="res://.godot/imported/mail_slot.glb-8a519310afd99cc69821d346cb81de8b.scn"
+uid="uid://ct7y1qoqnnh6x"
+path="res://.godot/imported/storage_shelf.glb-173291d5a4a19d70277d08d73ae5f3d7.scn"
 
 [deps]
 
-source_file="res://assets/models/mail_slot.glb"
-dest_files=["res://.godot/imported/mail_slot.glb-8a519310afd99cc69821d346cb81de8b.scn"]
+source_file="res://assets/models/storage_shelf.glb"
+dest_files=["res://.godot/imported/storage_shelf.glb-173291d5a4a19d70277d08d73ae5f3d7.scn"]
 
 [params]
 

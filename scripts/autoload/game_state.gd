@@ -116,7 +116,7 @@ func start_run() -> void:
 	run_new_clues = []
 	death_cause = ""
 	player_sleeping = false
-	weapon_container = ["shoe_cabinet", "storage_closet", "drawer_chest"][rng.randi_range(0, 2)]
+	weapon_container = ["shoe_cabinet", "storage_closet", "bedroom_closet"][rng.randi_range(0, 2)]
 	_roll_events()
 	roll_tonight_plan()
 
@@ -206,12 +206,12 @@ func _process(delta: float) -> void:
 		var before := gas_leak_left
 		gas_leak_left -= delta
 		if before > 30.0 and gas_leak_left <= 30.0:
-			say("The smell of gas is getting stronger. Close the gas main!", "danger")
+			say("The smell of gas is getting stronger. Close the gas valve!", "danger")
 		elif before > 10.0 and gas_leak_left <= 10.0:
 			say("Your head is swimming. The gas!", "danger")
 		if gas_leak_left <= 0.0:
 			shake.emit(1.4, 1.5)
-			damage(9999.0, "Gas explosion. The gas main was never closed after the quake.")
+			damage(9999.0, "Gas explosion. The gas valve was never closed after the quake.")
 
 
 func advance_minutes(m: float) -> void:
@@ -462,6 +462,7 @@ func _setup_input() -> void:
 		"interact_alt": [KEY_R],
 		"attack": [KEY_SPACE],
 		"sneak": [KEY_SHIFT],
+		"flashlight": [KEY_F],
 		"eat": [KEY_1],
 		"drink": [KEY_2],
 		"medkit": [KEY_3],

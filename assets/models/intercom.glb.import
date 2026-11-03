@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://c1swalrn8cmx6"
-path="res://.godot/imported/storage_closet.glb-605e1dd118ff58748d391867ee9004f1.scn"
+uid="uid://cjxdqh07ju3to"
+path="res://.godot/imported/intercom.glb-6e8a74becde9f5e3cc44d4ff27fa7a25.scn"
 
 [deps]
 
-source_file="res://assets/models/storage_closet.glb"
-dest_files=["res://.godot/imported/storage_closet.glb-605e1dd118ff58748d391867ee9004f1.scn"]
+source_file="res://assets/models/intercom.glb"
+dest_files=["res://.godot/imported/intercom.glb-6e8a74becde9f5e3cc44d4ff27fa7a25.scn"]
 
 [params]
 

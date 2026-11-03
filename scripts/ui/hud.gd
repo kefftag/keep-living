@@ -52,6 +52,7 @@ func _ready() -> void:
 	_build_feed()
 	_build_prompt()
 	_build_help()
+	_build_crosshair()
 	_build_overlay()
 
 	Game.message.connect(_on_message)
@@ -196,9 +197,10 @@ func _build_feed() -> void:
 
 func _build_prompt() -> void:
 	prompt_box = _panel()
-	prompt_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	prompt_box.position = Vector2(-300, -150)
-	prompt_box.custom_minimum_size = Vector2(600, 0)
+	prompt_box.set_anchors_preset(Control.PRESET_CENTER)
+	prompt_box.position = Vector2(-230, 40)
+	prompt_box.custom_minimum_size = Vector2(460, 0)
+	prompt_box.add_theme_stylebox_override("panel", _style(Color(0.04, 0.05, 0.06, 0.55)))
 	root.add_child(prompt_box)
 	var v := VBoxContainer.new()
 	prompt_box.add_child(v)
@@ -210,16 +212,32 @@ func _build_prompt() -> void:
 	prompt_label.add_theme_font_size_override("bold_font_size", 17)
 	prompt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(prompt_label)
-	hold_bar = _bar(C_ACCENT, 576)
+	hold_bar = _bar(C_ACCENT, 436)
 	v.add_child(hold_bar)
 	prompt_box.visible = false
 
 
 func _build_help() -> void:
-	var l := _label("WASD move   Shift sneak   E / R hold to use   Space / LMB swing   1 eat  2 drink  3 first aid   J journal   Esc menu", 13, C_DIM)
+	var l := _label("Mouse look   WASD move   Shift walk quietly   E / R hold to use   LMB / Space swing   F phone light   1 eat  2 drink  3 first aid   J journal   Esc menu", 13, C_DIM)
 	l.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	l.position = Vector2(16, -30)
 	root.add_child(l)
+
+
+func _build_crosshair() -> void:
+	var dot := ColorRect.new()
+	dot.color = Color(1, 1, 1, 0.75)
+	dot.size = Vector2(4, 4)
+	dot.set_anchors_preset(Control.PRESET_CENTER)
+	dot.position = Vector2(-2, -2)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(dot)
+
+
+func _capture_mouse(captured: bool) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if captured else Input.MOUSE_MODE_VISIBLE
 
 
 # --- Per-frame refresh ------------------------------------------------------------------
@@ -251,7 +269,7 @@ func _process(_delta: float) -> void:
 func _info_text() -> String:
 	var lines: Array = []
 	if Game.gas_leaking:
-		lines.append("GAS LEAK: %ds. Close the gas main!" % int(Game.gas_leak_left))
+		lines.append("GAS LEAK: %ds. Close the gas valve!" % int(Game.gas_leak_left))
 	if Game.player_sleeping:
 		lines.append("Resting... (move to get up)")
 	if Game.hunger <= 0.0:
@@ -365,6 +383,7 @@ func _open(kind: String) -> void:
 		c.queue_free()
 	overlay.visible = true
 	get_tree().paused = true
+	_capture_mouse(false)
 
 
 func _fit_overlay() -> void:
@@ -380,6 +399,7 @@ func _close() -> void:
 	overlay.visible = false
 	overlay_kind = ""
 	get_tree().paused = false
+	_capture_mouse(Game.is_alive_phase())
 	if _reading_queue.size() > 0:
 		var next: Array = _reading_queue.pop_front()
 		_show_reading(next[0], next[1])
@@ -397,6 +417,9 @@ func _heading(text: String, font_size: int = 30, color: Color = C_TEXT) -> Label
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if overlay_kind == "" and Game.is_alive_phase() and event is InputEventMouseButton and event.pressed \
+			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		_capture_mouse(true)
 	if event is InputEventKey and not event.pressed:
 		return
 	match overlay_kind:
@@ -453,8 +476,8 @@ func _show_intro() -> void:
 
 
 func _start_run() -> void:
-	_close()
 	Game.begin()
+	_close()
 	Game.say("Your phone is buzzing on the bedside table.", "info")
 
 

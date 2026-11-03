@@ -1,6 +1,6 @@
 # Keep Living
 
-A roguelite about surviving the end of the world from inside your Tokyo apartment.
+A first-person roguelite about surviving the end of the world from inside your Tokyo apartment.
 
 It's 07:58 and your phone is screaming. Something has happened outside. You
 don't know what yet. Make your 1LDK safe, work out what's going on from the
@@ -13,7 +13,7 @@ from clues. More scenarios will reuse the same apartment.
 Built with **Godot 4.4** (GDScript). Props are made in **Blender**, driven
 through Blender MCP or headless scripts.
 
-![Night one](docs/img/night.png)
+![The LDK](docs/img/ldk.png)
 
 ## Run it
 
@@ -28,14 +28,27 @@ godot --path .
 
 | Key | Action |
 | --- | --- |
+| Mouse | Look (click the window to capture the mouse) |
 | WASD / arrows | Move |
-| Shift | Sneak (quieter footsteps) |
-| E (hold) | Use the focused object (search, reinforce, secure...) |
+| Shift | Walk quietly |
+| E (hold) | Use what you're looking at: open doors, search, reinforce, secure... |
 | R (hold) | Alternate use (patch, dismantle, cook...) |
-| Space / left click | Swing (fists, or the metal bat if you've found it) |
+| Left click / Space | Swing (fists, or the metal bat if you've found it) |
+| F | Phone light |
 | 1 / 2 / 3 | Eat / drink / use a first-aid kit |
 | J or Tab | Journal: clues, insights, theory board, Echoes |
 | Esc | Menu |
+
+## The apartment
+
+A typical ~46 m² Tokyo 1LDK on the third floor, laid out on the 910 mm
+module Japanese plans use, with 2.4 m ceilings: genkan with a step up and a
+shoe cabinet, a hallway, a separate toilet, a washroom (vanity + top-loading
+washer) leading to the unit bath, a wall kitchen with a 2-burner gas stove,
+a living room with floor-to-ceiling sliding windows onto the balcony, and a
+6-jo bedroom behind sliding doors. Outside: the balcony with its
+kick-through emergency partitions, and the shared outdoor corridor that
+leads to the stairwell.
 
 ## How a run plays
 
@@ -45,7 +58,7 @@ godot --path .
   stairwell and hammer on the front door, the balcony door and the windows.
   Noise draws more of them. If an entrance breaks, they come inside.
 - **Things you didn't secure kill you too:** earthquakes topple furniture (on you,
-  or on your bed while you sleep), an open gas main leaks after a quake, the
+  or on your bed while you sleep), an open gas valve leaks after a quake, the
   water stops on day 2, and the power fails on day 3.
 - **Survive 5 nights** and you're rescued at dawn on day 6.
 
@@ -72,7 +85,7 @@ scripts/
   enemies/zombie.gd
   systems/night_director.gd   # nightly siege + noise response
   systems/event_director.gd   # earthquakes, water/power cuts, mail
-  systems/camera_rig.gd
+  world/door.gd               # hinged / sliding interior doors
   ui/hud.gd                   # all UI
   dev/smoke_test.gd           # scripted playthrough
 assets/models/*.glb           # props from tools/blender/build_props.py

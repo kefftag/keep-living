@@ -58,8 +58,6 @@ PALETTE = {
     "skin": ((0.85, 0.66, 0.52), 0.8, 0.0),
     "skin_dead": ((0.45, 0.52, 0.42), 0.8, 0.0),
     "hair": ((0.06, 0.05, 0.05), 0.8, 0.0),
-    "hoodie": ((0.16, 0.28, 0.50), 0.9, 0.0),
-    "jeans": ((0.18, 0.22, 0.32), 0.9, 0.0),
     "shirt_dirty": ((0.70, 0.68, 0.60), 0.9, 0.0),
     "blood": ((0.35, 0.02, 0.02), 0.6, 0.0),
     "suit": ((0.12, 0.12, 0.14), 0.9, 0.0),
@@ -157,42 +155,53 @@ def handle(p, x, z, d, vertical=False, mat="steel"):
     p.box(size, (x, -d / 2 - 0.015, z), mat)
 
 
+def kitchen_base(p, w, kick=0.08, h=0.85, d=0.65):
+    """System-kitchen unit: recessed toe kick, doors, stone-look counter."""
+    p.box((w, d - 0.06, kick), (0, 0.03, 0), "black")
+    p.box((w, d, h - kick - 0.04), (0, 0, kick), "white")
+    p.box((w + 0.005, d + 0.02, 0.04), (0, -0.01, h - 0.04), "stone")
+
+
 def bed():
     p = Prop("bed")
-    p.box((1.4, 2.0, 0.2), (0, 0, 0), "wood_light")
-    p.box((1.3, 1.9, 0.18), (0, 0, 0.2), "fabric_white")
-    p.box((1.34, 1.25, 0.08), (0, -0.33, 0.37), "fabric_blue")
-    p.box((0.6, 0.32, 0.1), (0, 0.72, 0.37), "fabric_white")
+    w, d = 1.2, 1.95
+    p.box((w, d, 0.22), (0, 0, 0), "wood_light")
+    p.box((w, 0.05, 0.75), (0, d / 2 - 0.025, 0), "wood_light")            # headboard (bed head = +Y)
+    p.box((w - 0.06, d - 0.08, 0.2), (0, -0.02, 0.22), "fabric_white")      # mattress
+    p.box((w - 0.02, d * 0.62, 0.07), (0, -0.33, 0.4), "fabric_blue")      # duvet
+    p.box((0.55, 0.32, 0.1), (0, 0.7, 0.42), "fabric_white")               # pillow
     return p
 
 
 def wardrobe():
     p = Prop("wardrobe")
-    p.box((1.0, 0.6, 1.9), (0, 0, 0), "wood")
-    for x in (-0.25, 0.25):
-        p.box((0.47, 0.02, 1.78), (x, -0.31, 0.06), "wood_light")
-        handle(p, x * 0.15, 0.95, 0.64, vertical=True)
+    w, h, d = 0.75, 1.8, 0.55
+    p.box((w, d, h), (0, 0, 0), "wood")
+    p.box((w + 0.02, d + 0.02, 0.03), (0, 0, h - 0.03), "wood_dark")
+    for x in (-w / 4, w / 4):
+        p.box((w / 2 - 0.015, 0.02, h - 0.12), (x, -d / 2 - 0.01, 0.06), "wood_light")
+        handle(p, x * 0.2, h * 0.55, d + 0.02, vertical=True)
     return p
 
 
 def bookshelf():
     p = Prop("bookshelf")
     rng = random.Random(7)
-    w, h, d = 1.0, 1.9, 0.45
+    w, h, d = 0.8, 1.8, 0.3
     for x in (-w / 2 + 0.015, w / 2 - 0.015):
         p.box((0.03, d, h), (x, 0, 0), "wood")
-    p.box((w, 0.02, h), (0, d / 2 - 0.01, 0), "wood_dark")
-    shelves = [0.0, 0.47, 0.94, 1.41, 1.87]
+    p.box((w, 0.015, h), (0, d / 2 - 0.0075, 0), "wood_dark")
+    shelves = [0.0, 0.44, 0.88, 1.32, 1.77]
     for z in shelves:
         p.box((w - 0.06, d - 0.02, 0.03), (0, 0, z), "wood")
     book_mats = ["red", "fabric_blue", "paper", "orange", "black", "wood_light"]
     for z in shelves[:-1]:
         x = -w / 2 + 0.05
-        while x < w / 2 - 0.08:
-            bw = rng.uniform(0.025, 0.06)
-            bh = rng.uniform(0.22, 0.38)
+        while x < w / 2 - 0.07:
+            bw = rng.uniform(0.02, 0.05)
+            bh = rng.uniform(0.18, 0.36)
             if rng.random() > 0.12:
-                p.box((bw, d * 0.7, bh), (x + bw / 2, -0.03, z + 0.03), rng.choice(book_mats))
+                p.box((bw, d * 0.75, bh), (x + bw / 2, -0.01, z + 0.03), rng.choice(book_mats))
             x += bw + 0.004
     return p
 
@@ -203,96 +212,114 @@ def side_table():
     for x in (-0.17, 0.17):
         for y in (-0.17, 0.17):
             p.box((0.035, 0.035, 0.41), (x, y, 0), "wood")
-    p.box((0.08, 0.16, 0.012), (0.02, 0, 0.45), "black")
-    p.box((0.07, 0.14, 0.004), (0.02, 0, 0.462), "screen")
+    p.box((0.075, 0.155, 0.009), (0.02, 0, 0.45), "black")
+    p.box((0.068, 0.145, 0.003), (0.02, 0, 0.459), "screen")
+    p.cyl(0.06, 0.12, (-0.1, 0.08, 0.51), "fabric_white", radius2=0.09)  # little lamp shade
     return p
 
 
-def drawer_chest():
-    p = Prop("drawer_chest")
-    cabinet_body(p, 1.0, 0.9, 0.5, "wood")
-    for i, z in enumerate((0.04, 0.33, 0.62)):
-        p.box((0.94, 0.02, 0.25), (0, -0.26, z), "wood_light")
-        handle(p, 0, z + 0.13, 0.54)
+def closet_builtin():
+    """クローゼット: built-in closet with four white folding-door panels."""
+    p = Prop("closet_builtin")
+    w, h, d = 1.8, 2.0, 0.55
+    p.box((w, d, h), (0, 0, 0), "white")
+    pw = (w - 0.06) / 4
+    for i in range(4):
+        x = -w / 2 + 0.03 + pw * (i + 0.5)
+        p.box((pw - 0.008, 0.025, h - 0.1), (x, -d / 2 - 0.0125, 0.05), "porcelain")
+    for x in (-pw * 0.5 - 0.03, pw * 0.5 + 0.03):
+        p.box((0.02, 0.03, 0.12), (x * 1.0, -d / 2 - 0.04, 1.0), "steel")
+    p.box((w, 0.03, 0.05), (0, -d / 2 - 0.015, h - 0.05), "white")
     return p
 
 
 def desk():
     p = Prop("desk")
-    p.box((0.9, 0.55, 0.04), (0, 0, 0.68), "wood_light")
-    for x in (-0.42, 0.42):
-        p.box((0.04, 0.5, 0.68), (x, 0, 0), "steel")
-    p.box((0.34, 0.24, 0.018), (0, -0.04, 0.72), "plastic_grey")
-    p.box((0.34, 0.012, 0.22), (0, 0.085, 0.738), "plastic_grey", rot=(-12, 0, 0))
-    p.box((0.31, 0.004, 0.19), (0, 0.077, 0.752), "screen", rot=(-12, 0, 0))
+    p.box((0.85, 0.5, 0.03), (0, 0, 0.69), "wood_light")
+    for x in (-0.4, 0.4):
+        p.box((0.03, 0.46, 0.69), (x, 0, 0), "steel")
+    p.box((0.32, 0.22, 0.016), (0, -0.04, 0.72), "plastic_grey")
+    p.box((0.32, 0.01, 0.21), (0, 0.075, 0.736), "plastic_grey", rot=(-12, 0, 0))
+    p.box((0.29, 0.004, 0.18), (0, 0.068, 0.75), "screen", rot=(-12, 0, 0))
+    p.box((0.1, 0.1, 0.11), (0.3, 0.12, 0.72), "porcelain")  # mug
     return p
 
 
 def kitchen_cabinet():
     p = Prop("kitchen_cabinet")
-    cabinet_body(p, 1.0, 0.9, 0.55, "white", top="stone")
-    for x in (-0.25, 0.25):
-        p.box((0.47, 0.02, 0.78), (x, -0.285, 0.04), "porcelain")
-        handle(p, x * 0.2, 0.7, 0.59, vertical=True)
+    kitchen_base(p, 0.6)
+    p.box((0.56, 0.02, 0.18), (0, -0.335, 0.6), "porcelain")    # drawer
+    p.box((0.56, 0.02, 0.48), (0, -0.335, 0.1), "porcelain")    # door
+    handle(p, 0, 0.74, 0.69)
+    handle(p, 0.22, 0.45, 0.69, vertical=True)
     return p
 
 
 def kitchen_sink():
     p = Prop("kitchen_sink")
-    cabinet_body(p, 0.7, 0.9, 0.55, "white", top="stone")
-    p.box((0.46, 0.36, 0.015), (0, -0.03, 0.9), "steel")
-    p.box((0.4, 0.3, 0.004), (0, -0.03, 0.912), "black")
-    p.cyl(0.015, 0.28, (0, 0.2, 1.04), "steel")
-    p.box((0.03, 0.18, 0.03), (0, 0.12, 1.16), "steel")
-    p.box((0.66, 0.02, 0.78), (0, -0.285, 0.04), "porcelain")
+    kitchen_base(p, 0.7)
+    p.box((0.5, 0.38, 0.012), (0, -0.04, 0.85), "steel")
+    p.box((0.44, 0.32, 0.004), (0, -0.04, 0.861), "black")
+    p.cyl(0.018, 0.3, (0.15, 0.22, 1.0), "steel")
+    p.box((0.03, 0.2, 0.03), (0.15, 0.13, 1.13), "steel", rot=(-15, 0, 0))
+    p.box((0.66, 0.02, 0.7), (0, -0.335, 0.1), "porcelain")
+    handle(p, 0, 0.74, 0.69)
     return p
 
 
 def gas_stove():
+    """2-burner tabletop gas stove (ガスコンロ) with the gas cock (ガス栓) beside it."""
     p = Prop("gas_stove")
-    cabinet_body(p, 0.7, 0.9, 0.55, "white", top="stone")
-    p.box((0.6, 0.42, 0.03), (0, 0, 0.9), "black")
-    for x in (-0.15, 0.15):
-        p.cyl(0.08, 0.02, (x, 0.0, 0.94), "steel")
-        p.cyl(0.03, 0.025, (x, 0.0, 0.95), "black")
-        p.cyl(0.025, 0.03, (x, -0.295, 0.8), "black", axis="Y")
-    # The gas main: a yellow valve handle on the front panel.
-    p.box((0.12, 0.03, 0.04), (0.2, -0.29, 0.25), "yellow")
-    p.box((0.62, 0.02, 0.6), (0, -0.285, 0.05), "porcelain")
+    kitchen_base(p, 0.65)
+    p.box((0.58, 0.45, 0.1), (0, 0.0, 0.85), "black")             # the stove body
+    for x in (-0.14, 0.14):
+        p.cyl(0.075, 0.015, (x, 0.03, 0.955), "steel")
+        p.cyl(0.03, 0.02, (x, 0.03, 0.96), "black")
+        for a in range(4):
+            p.box((0.12, 0.012, 0.012), (x, 0.03, 0.97), "black", rot=(0, 0, a * 45))
+        p.cyl(0.018, 0.03, (x, -0.235, 0.9), "plastic_grey", axis="Y")
+    p.box((0.18, 0.02, 0.05), (0, -0.226, 0.88), "glass_dark")     # grill door
+    p.box((0.05, 0.05, 0.05), (0.29, 0.29, 0.85), "steel")          # gas cock on the counter...
+    p.box((0.07, 0.015, 0.015), (0.29, 0.29, 0.905), "yellow")      # ...with its yellow lever
+    p.box((0.61, 0.02, 0.62), (0, -0.335, 0.1), "porcelain")
+    handle(p, 0, 0.62, 0.69)
     return p
 
 
 def fridge():
     p = Prop("fridge")
-    p.box((0.7, 0.65, 1.8), (0, 0, 0), "white")
-    p.box((0.66, 0.02, 0.55), (0, -0.33, 1.22), "porcelain")
-    p.box((0.66, 0.02, 1.15), (0, -0.33, 0.04), "porcelain")
-    handle(p, -0.28, 1.45, 0.68, vertical=True)
-    handle(p, -0.28, 0.95, 0.68, vertical=True)
+    w, h, d = 0.6, 1.6, 0.62
+    p.box((w, d, h), (0, 0, 0), "white")
+    p.box((w - 0.02, 0.02, 0.5), (0, -d / 2 - 0.01, 1.08), "porcelain")
+    p.box((w - 0.02, 0.02, 1.0), (0, -d / 2 - 0.01, 0.05), "porcelain")
+    handle(p, -0.25, 1.3, d + 0.02, vertical=True)
+    handle(p, -0.25, 0.95, d + 0.02, vertical=True)
+    p.box((0.45, 0.35, 0.26), (0, 0, h), "black")                    # microwave on top
+    p.box((0.3, 0.01, 0.18), (-0.04, -0.176, h + 0.04), "glass_dark")
     return p
 
 
 def tv_stand():
     p = Prop("tv_stand")
-    p.box((1.2, 0.4, 0.4), (0, 0, 0.05), "wood_dark")
+    p.box((1.2, 0.4, 0.38), (0, 0, 0.07), "wood_dark")
     for x in (-0.55, 0.55):
-        p.box((0.05, 0.35, 0.05), (x, 0, 0), "black")
-    p.box((0.3, 0.18, 0.03), (0, 0.05, 0.45), "black")
-    p.box((0.04, 0.04, 0.12), (0, 0.05, 0.48), "black")
-    p.box((1.0, 0.05, 0.58), (0, 0.05, 0.58), "black")
-    p.box((0.96, 0.01, 0.54), (0, 0.02, 0.6), "glass_dark")
+        p.box((0.05, 0.35, 0.07), (x, 0, 0), "black")
+    p.box((0.3, 0.18, 0.02), (0, 0.05, 0.45), "black")
+    p.box((0.04, 0.04, 0.1), (0, 0.05, 0.47), "black")
+    p.box((0.98, 0.05, 0.58), (0, 0.05, 0.55), "black")
+    p.box((0.95, 0.01, 0.55), (0, 0.022, 0.565), "glass_dark")
     return p
 
 
 def kotatsu():
     p = Prop("kotatsu")
-    p.box((0.96, 0.96, 0.3), (0, 0, 0), "futon_red")
-    p.box((0.9, 0.9, 0.03), (0, 0, 0.36), "wood_light")
-    p.box((0.86, 0.86, 0.06), (0, 0, 0.3), "futon_red")
-    # Hand-crank radio
-    p.box((0.22, 0.09, 0.13), (0.1, 0.05, 0.39), "orange")
-    p.cyl(0.035, 0.012, (0.05, -0.0, 0.46), "black", axis="Y")
-    p.box((0.008, 0.008, 0.25), (0.19, 0.08, 0.52), "steel", rot=(0, 20, 0))
+    p.box((0.86, 0.86, 0.3), (0, 0, 0), "futon_red")
+    p.box((0.8, 0.8, 0.03), (0, 0, 0.37), "wood_light")
+    p.box((0.78, 0.78, 0.07), (0, 0, 0.3), "futon_red")
+    p.box((0.22, 0.09, 0.13), (0.1, 0.05, 0.4), "orange")              # hand-crank radio
+    p.cyl(0.035, 0.012, (0.05, -0.0, 0.47), "black", axis="Y")
+    p.box((0.008, 0.008, 0.25), (0.19, 0.08, 0.53), "steel", rot=(0, 20, 0))
+    p.box((0.03, 0.08, 0.02), (0.22, 0.02, 0.45), "black")             # crank
     return p
 
 
@@ -306,47 +333,76 @@ def binocular_stand():
     return p
 
 
-def bathtub():
-    p = Prop("bathtub")
-    w, d, h = 1.6, 0.75, 0.55
-    p.box((w, d, 0.1), (0, 0, 0), "porcelain")
-    for y in (-d / 2 + 0.04, d / 2 - 0.04):
-        p.box((w, 0.08, h - 0.1), (0, y, 0.1), "porcelain")
-    for x in (-w / 2 + 0.04, w / 2 - 0.04):
-        p.box((0.08, d - 0.16, h - 0.1), (x, 0, 0.1), "porcelain")
-    p.cyl(0.02, 0.15, (w / 2 - 0.1, d / 2 - 0.05, 0.62), "steel")
+def vanity():
+    """洗面化粧台: basin cabinet + three-way mirror cabinet with a light."""
+    p = Prop("vanity")
+    w, d = 0.75, 0.5
+    p.box((w, d, 0.78), (0, 0, 0), "white")
+    p.box((w, d + 0.02, 0.06), (0, -0.01, 0.78), "porcelain")
+    p.box((0.5, 0.32, 0.01), (0, -0.04, 0.84), "porcelain")
+    p.box((0.44, 0.26, 0.004), (0, -0.04, 0.851), "glass_dark")
+    p.cyl(0.015, 0.18, (0, 0.17, 0.93), "steel")
+    p.box((w - 0.02, 0.02, 0.66), (0, -d / 2 - 0.01, 0.06), "porcelain")
+    handle(p, 0, 0.7, d + 0.02)
+    p.box((w, 0.16, 0.7), (0, d / 2 - 0.08, 1.05), "white")           # mirror cabinet
+    for x in (-w / 3, 0, w / 3):
+        p.box((w / 3 - 0.01, 0.01, 0.6), (x, d / 2 - 0.165, 1.08), "mirror")
+    p.box((w, 0.12, 0.05), (0, d / 2 - 0.1, 1.75), "fabric_white")    # light strip
     return p
 
 
-def medicine_cabinet():
-    p = Prop("medicine_cabinet")
-    p.box((0.6, 0.35, 0.78), (0, 0, 0), "white")
-    p.box((0.62, 0.38, 0.04), (0, -0.01, 0.78), "porcelain")
-    p.box((0.34, 0.24, 0.01), (0, -0.03, 0.815), "steel")
-    p.box((0.56, 0.02, 0.7), (0, -0.18, 0.05), "porcelain")
-    p.box((0.5, 0.03, 0.17), (0, 0.15, 0.83), "mirror")
+def washing_machine():
+    """Top-loading washer, as most Japanese homes use, on its waterproof pan."""
+    p = Prop("washing_machine")
+    p.box((0.64, 0.64, 0.06), (0, 0, 0), "porcelain")                  # 防水パン
+    p.box((0.56, 0.56, 0.86), (0, 0, 0.06), "white")
+    p.box((0.5, 0.36, 0.02), (0, -0.07, 0.92), "glass_dark")           # lid window
+    p.box((0.56, 0.14, 0.08), (0, 0.21, 0.92), "porcelain")            # control panel
+    p.box((0.3, 0.01, 0.04), (0, 0.14, 0.96), "screen")
+    return p
+
+
+def bathtub():
+    p = Prop("bathtub")
+    w, d, h = 1.7, 0.7, 0.55
+    p.box((w, d, 0.1), (0, 0, 0), "porcelain")
+    for y in (-d / 2 + 0.05, d / 2 - 0.05):
+        p.box((w, 0.1, h - 0.1), (0, y, 0.1), "porcelain")
+    for x in (-w / 2 + 0.05, w / 2 - 0.05):
+        p.box((0.1, d - 0.2, h - 0.1), (x, 0, 0.1), "porcelain")
+    p.box((w - 0.2, d - 0.2, 0.02), (0, 0, 0.1), "fabric_blue")        # tub floor tint
+    p.box((0.5, 0.04, 0.2), (w / 2 - 0.35, d / 2 + 0.01, 0.75), "steel")  # mixer tap on the wall
+    p.cyl(0.04, 0.03, (w / 2 - 0.35, d / 2 - 0.01, 1.4), "steel", axis="Y")  # shower head
+    p.box((0.2, 0.02, 0.12), (-w / 2 + 0.3, d / 2 + 0.01, 0.9), "plastic_grey")  # 給湯 controller
     return p
 
 
 def toilet():
     p = Prop("toilet")
-    p.box((0.36, 0.48, 0.38), (0, -0.08, 0), "porcelain")
-    p.box((0.4, 0.46, 0.03), (0, -0.09, 0.39), "white")
+    p.box((0.36, 0.46, 0.38), (0, -0.08, 0), "porcelain")
+    p.box((0.4, 0.46, 0.05), (0, -0.09, 0.38), "white")                # washlet seat
     p.box((0.42, 0.18, 0.4), (0, 0.26, 0.4), "porcelain")
-    # shelf above
-    p.box((0.45, 0.2, 0.025), (0, 0.25, 0.78), "wood_light")
+    p.box((0.1, 0.03, 0.18), (0.32, 0.0, 0.62), "white")               # washlet remote on the wall
+    p.box((0.45, 0.22, 0.025), (0, 0.24, 1.2), "wood_light")           # shelf
+    p.box((0.12, 0.12, 0.12), (-0.12, 0.24, 1.225), "fabric_white")    # toilet roll
     return p
 
 
-def storage_closet():
-    p = Prop("storage_closet")
-    p.box((1.2, 0.5, 1.6), (0, 0, 0), "wood")
-    for x in (-0.3, 0.3):
-        p.box((0.58, 0.02, 1.5), (x, -0.26 + (0.0 if x < 0 else 0.015), 0.05), "paper")
-        p.box((0.6, 0.025, 0.04), (x, -0.27, 0.05), "wood_light")
-        p.box((0.6, 0.025, 0.04), (x, -0.27, 1.51), "wood_light")
-        p.box((0.04, 0.025, 1.5), (x - 0.28, -0.27, 0.05), "wood_light")
-        p.box((0.04, 0.025, 1.5), (x + 0.28, -0.27, 0.05), "wood_light")
+def storage_shelf():
+    p = Prop("storage_shelf")
+    rng = random.Random(3)
+    w, h, d = 0.8, 1.8, 0.35
+    for x in (-w / 2 + 0.015, w / 2 - 0.015):
+        for y in (-d / 2 + 0.015, d / 2 - 0.015):
+            p.box((0.025, 0.025, h), (x, y, 0), "steel")
+    for z in (0.08, 0.5, 0.95, 1.4, 1.78):
+        p.box((w, d, 0.02), (0, 0, z), "steel")
+        if z < 1.7:
+            x = -w / 2 + 0.06
+            while x < w / 2 - 0.15:
+                bw = rng.uniform(0.15, 0.3)
+                p.box((bw, d * 0.8, rng.uniform(0.15, 0.32)), (x + bw / 2, 0, z + 0.02), rng.choice(["paper", "wood_light", "fabric_white"]))
+                x += bw + 0.03
     return p
 
 
@@ -361,95 +417,140 @@ def emergency_bag():
 
 def toolbox():
     p = Prop("toolbox")
-    p.box((0.5, 0.28, 0.2), (0, 0, 0), "red")
-    p.box((0.51, 0.29, 0.02), (0, 0, 0.18), "red")
-    p.box((0.03, 0.03, 0.06), (-0.12, 0, 0.2), "black")
-    p.box((0.03, 0.03, 0.06), (0.12, 0, 0.2), "black")
-    p.box((0.27, 0.03, 0.025), (0, 0, 0.255), "black")
-    p.box((0.06, 0.02, 0.04), (0, -0.15, 0.15), "steel")
+    p.box((0.4, 0.23, 0.18), (0, 0, 0), "red")
+    p.box((0.41, 0.24, 0.02), (0, 0, 0.17), "red")
+    p.box((0.03, 0.03, 0.05), (-0.1, 0, 0.19), "black")
+    p.box((0.03, 0.03, 0.05), (0.1, 0, 0.19), "black")
+    p.box((0.23, 0.03, 0.02), (0, 0, 0.23), "black")
     return p
 
 
 def shoe_cabinet():
+    """下駄箱."""
     p = Prop("shoe_cabinet")
-    cabinet_body(p, 1.2, 1.0, 0.4, "wood_light", top="wood")
-    for x in (-0.3, 0.3):
-        p.box((0.57, 0.02, 0.9), (x, -0.205, 0.04), "wood")
-        handle(p, x * 0.1, 0.55, 0.43, vertical=True)
+    cabinet_body(p, 0.75, 0.9, 0.35, "wood_light", top="wood")
+    for x in (-0.187, 0.187):
+        p.box((0.36, 0.02, 0.8), (x, -0.185, 0.05), "wood")
+        handle(p, x * 0.15, 0.55, 0.39, vertical=True)
+    p.box((0.2, 0.1, 0.25), (0.2, 0, 0.9), "fabric_white")              # tissue box / keys tray
     return p
 
 
-def mail_slot():
-    p = Prop("mail_slot")
-    p.box((0.3, 0.1, 0.95), (0, 0.01, 0), "wood")
-    p.box((0.3, 0.12, 0.03), (0, 0, 0.95), "wood_dark")
-    p.box((0.22, 0.09, 0.015), (0.02, 0, 0.98), "paper", rot=(0, 0, 8))
-    p.box((0.2, 0.08, 0.012), (-0.02, 0, 0.995), "fabric_white", rot=(0, 0, -5))
+def mail_pile():
+    p = Prop("mail_pile")
+    rng = random.Random(11)
+    for i in range(5):
+        p.box((rng.uniform(0.14, 0.24), rng.uniform(0.09, 0.15), 0.004), (rng.uniform(-0.05, 0.05), rng.uniform(-0.04, 0.04), i * 0.005),
+              rng.choice(["paper", "fabric_white", "porcelain"]), rot=(0, 0, rng.uniform(-30, 30)))
+    return p
+
+
+def dining_table():
+    p = Prop("dining_table")
+    p.box((0.75, 0.75, 0.03), (0, 0, 0.67), "wood_light")
+    for x in (-0.33, 0.33):
+        for y in (-0.33, 0.33):
+            p.box((0.04, 0.04, 0.67), (x, y, 0), "wood")
     return p
 
 
 def dining_chair():
     p = Prop("dining_chair")
-    p.box((0.45, 0.45, 0.04), (0, 0, 0.43), "wood_light")
-    for x in (-0.19, 0.19):
-        for y in (-0.19, 0.19):
-            p.box((0.04, 0.04, 0.43), (x, y, 0), "wood")
-    for x in (-0.19, 0.19):
-        p.box((0.04, 0.04, 0.4), (x, 0.19, 0.47), "wood")
-    p.box((0.42, 0.03, 0.15), (0, 0.19, 0.7), "wood_light")
+    p.box((0.42, 0.42, 0.04), (0, 0, 0.43), "wood_light")
+    for x in (-0.18, 0.18):
+        for y in (-0.18, 0.18):
+            p.box((0.035, 0.035, 0.43), (x, y, 0), "wood")
+    for x in (-0.18, 0.18):
+        p.box((0.035, 0.035, 0.4), (x, 0.18, 0.47), "wood")
+    p.box((0.4, 0.03, 0.15), (0, 0.18, 0.7), "wood_light")
     return p
 
 
-def washing_machine():
-    p = Prop("washing_machine")
-    p.box((0.6, 0.6, 0.85), (0, 0, 0), "white")
-    p.cyl(0.19, 0.03, (0, -0.31, 0.42), "plastic_grey", axis="Y")
-    p.cyl(0.15, 0.035, (0, -0.315, 0.42), "glass_dark", axis="Y")
-    p.box((0.5, 0.03, 0.1), (0, -0.3, 0.72), "plastic_grey")
+def range_hood():
+    p = Prop("range_hood")
+    p.box((0.65, 0.5, 0.12), (0, 0, 0), "white")
+    p.box((0.35, 0.3, 0.33), (0, 0.08, 0.12), "white")
+    p.box((0.5, 0.01, 0.03), (0, -0.255, 0.04), "plastic_grey")
     return p
 
 
-def humanoid(name, skin, top, legs, zombie=False):
-    p = Prop(name)
-    tilt = 8 if zombie else 0
-    for x in (-0.1, 0.1):
-        p.box((0.13, 0.15, 0.78), (x, 0, 0), legs)
-        p.box((0.14, 0.22, 0.07), (x, -0.03, 0), "black")
-    p.box((0.42, 0.22, 0.58), (0, 0, 0.78), top, rot=(tilt, 0, 0))
-    p.box((0.2, 0.2, 0.24), (0.0, -0.05 if zombie else 0, 1.38), skin, rot=(tilt * 2, 0, 6 if zombie else 0))
-    p.box((0.21, 0.21, 0.07), (0.0, 0.0 if zombie else 0.01, 1.58), "hair", rot=(tilt * 2, 0, 6 if zombie else 0))
-    if zombie:
-        # Arms out in front, the classic reach.
-        for x in (-0.25, 0.25):
-            p.box((0.1, 0.55, 0.1), (x, -0.3, 1.18), "shirt_dirty")
-            p.box((0.09, 0.12, 0.09), (x, -0.62, 1.19), skin)
-        p.box((0.2, 0.05, 0.25), (0.08, -0.12, 0.95), "blood")
-        p.box((0.05, 0.03, 0.03), (-0.05, -0.15, 1.46), "blood")
-        p.box((0.05, 0.03, 0.03), (0.05, -0.15, 1.46), "blood")
-    else:
-        p.box((0.1, 0.12, 0.55), (-0.27, 0, 0.82), top)
-        p.box((0.09, 0.1, 0.1), (-0.27, 0, 0.72), skin)
-        p.box((0.16, 0.03, 0.04), (0, -0.11, 1.45), skin)
+def wall_cabinet():
+    p = Prop("wall_cabinet")
+    p.box((1.3, 0.35, 0.6), (0, 0, 0), "white")
+    for x in (-0.325, 0.325):
+        p.box((0.64, 0.02, 0.58), (x, -0.185, 0.01), "porcelain")
     return p
 
 
-def player():
-    return humanoid("player", "skin", "hoodie", "jeans")
+def ac_indoor():
+    p = Prop("ac_indoor")
+    p.box((0.8, 0.25, 0.28), (0, 0, 0), "white")
+    p.box((0.76, 0.02, 0.06), (0, -0.13, 0.02), "plastic_grey")       # louvre
+    p.box((0.05, 0.01, 0.015), (0.32, -0.126, 0.2), "screen")         # status LED
+    return p
+
+
+def ac_outdoor():
+    p = Prop("ac_outdoor")
+    p.box((0.7, 0.28, 0.55), (0, 0, 0.0), "white")
+    p.cyl(0.19, 0.02, (-0.1, -0.141, 0.28), "plastic_grey", axis="Y")
+    p.cyl(0.05, 0.025, (-0.1, -0.145, 0.28), "black", axis="Y")
+    return p
+
+
+def curtain():
+    p = Prop("curtain")
+    for i in range(5):
+        p.box((0.075, 0.06, 2.0), (-0.14 + i * 0.07, 0.012 * (i % 2), 0), "fabric_blue")
+    p.box((0.4, 0.04, 0.03), (0, 0, 2.0), "steel")
+    return p
+
+
+def intercom():
+    p = Prop("intercom")
+    p.box((0.18, 0.04, 0.13), (0, 0, 0), "white")
+    p.box((0.08, 0.005, 0.06), (-0.035, -0.021, 0.04), "glass_dark")
+    for z in (0.03, 0.065, 0.1):
+        p.box((0.03, 0.006, 0.018), (0.055, -0.021, z - 0.005), "porcelain")
+    return p
+
+
+def breaker_panel():
+    p = Prop("breaker_panel")
+    p.box((0.35, 0.1, 0.3), (0, 0, 0), "porcelain")
+    p.box((0.33, 0.005, 0.12), (0, -0.051, 0.16), "plastic_grey")
+    return p
 
 
 def zombie():
-    return humanoid("zombie", "skin_dead", "shirt_dirty", "suit", zombie=True)
+    p = Prop("zombie")
+    skin, top, legs = "skin_dead", "shirt_dirty", "suit"
+    for x in (-0.1, 0.1):
+        p.box((0.13, 0.15, 0.78), (x, 0, 0), legs)
+        p.box((0.14, 0.22, 0.07), (x, -0.03, 0), "black")
+    p.box((0.42, 0.22, 0.58), (0, 0, 0.78), top, rot=(8, 0, 0))
+    p.box((0.2, 0.2, 0.24), (0.0, -0.05, 1.38), skin, rot=(16, 0, 6))
+    p.box((0.21, 0.21, 0.07), (0.0, 0.0, 1.58), "hair", rot=(16, 0, 6))
+    for x in (-0.25, 0.25):
+        p.box((0.1, 0.55, 0.1), (x, -0.3, 1.18), "shirt_dirty")
+        p.box((0.09, 0.12, 0.09), (x, -0.62, 1.19), skin)
+    p.box((0.2, 0.05, 0.25), (0.08, -0.12, 0.95), "blood")
+    p.box((0.05, 0.03, 0.03), (-0.05, -0.15, 1.46), "blood")
+    p.box((0.05, 0.03, 0.03), (0.05, -0.15, 1.46), "blood")
+    return p
 
 
 BUILDERS = {
     "bed": bed, "wardrobe": wardrobe, "bookshelf": bookshelf, "side_table": side_table,
-    "drawer_chest": drawer_chest, "desk": desk, "kitchen_cabinet": kitchen_cabinet,
+    "closet_builtin": closet_builtin, "desk": desk, "kitchen_cabinet": kitchen_cabinet,
     "kitchen_sink": kitchen_sink, "gas_stove": gas_stove, "fridge": fridge, "tv_stand": tv_stand,
-    "kotatsu": kotatsu, "binocular_stand": binocular_stand, "bathtub": bathtub,
-    "medicine_cabinet": medicine_cabinet, "toilet": toilet, "storage_closet": storage_closet,
-    "emergency_bag": emergency_bag, "toolbox": toolbox, "shoe_cabinet": shoe_cabinet,
-    "mail_slot": mail_slot, "dining_chair": dining_chair, "washing_machine": washing_machine,
-    "player": player, "zombie": zombie,
+    "kotatsu": kotatsu, "binocular_stand": binocular_stand, "vanity": vanity,
+    "washing_machine": washing_machine, "bathtub": bathtub, "toilet": toilet,
+    "storage_shelf": storage_shelf, "emergency_bag": emergency_bag, "toolbox": toolbox,
+    "shoe_cabinet": shoe_cabinet, "mail_pile": mail_pile, "dining_table": dining_table,
+    "dining_chair": dining_chair, "range_hood": range_hood, "wall_cabinet": wall_cabinet,
+    "ac_indoor": ac_indoor, "ac_outdoor": ac_outdoor, "curtain": curtain, "intercom": intercom,
+    "breaker_panel": breaker_panel, "zombie": zombie,
 }
 
 

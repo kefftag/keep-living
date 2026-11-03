@@ -39,16 +39,28 @@ into the next attempt.
 - Resting on the bed skips to 19:30 (+15 HP). Events in the skipped time
   still fire, and that's how the wardrobe gets you in your sleep.
 
-## The apartment (3F, 1LDK, ~40 m²)
+## The apartment (3F, 1LDK, ~46 m²)
+
+First person, as realistic as possible: a real Tokyo 1LDK floor plan on the
+910 mm module (半間), 2.4 m ceilings, 85 cm kitchen counters, 70 cm interior
+doors, a genkan one step (15 cm) below the hallway. Exact layout and sizes:
+`scripts/world/apartment.gd`.
 
 | Area | Contents |
 | --- | --- |
-| Bedroom | futon bed (rest), **wardrobe** (hazard, falls onto the bed), phone (clue), drawers (loot), desk + laptop (clue) |
-| LDK | kitchen cabinets, sink (water), **gas stove + main** (hazard/cooking), fridge (spoils after the power cut), **bookshelf** (hazard), TV (clue, needs power), kotatsu + hand-crank radio (clue at night), binoculars (clue by day) |
-| Bath / toilet | **bathtub** (fill before day 2), medicine cabinet, toilet shelf |
-| Closet | storage (materials), emergency bag (clue + supplies), toolbox |
-| Genkan | shoe cabinet, mail slot (clues), **front door** |
-| Outside | balcony (north) with partitions to the neighbours; shared outdoor corridor (south) to the stairwell |
+| Genkan 玄関 | steel front door (outward-opening, peephole, door guard, mail slot), shoe cabinet, **mail on the floor** (clues), step up (上がり框) |
+| Hallway | breaker panel; doors to the toilet, washroom and LDK; closet off the genkan (storage shelves, emergency bag, toolbox) |
+| Toilet | separate WC with washlet, shelf above (loot) |
+| Washroom 洗面所 | vanity with mirror cabinet (loot), top-loading washer on its pan, door to the unit bath |
+| Unit bath | **bathtub** (fill it before day 2), barred frosted window onto the corridor |
+| Kitchen | wall kitchen: cabinets (loot), sink (water), **2-burner gas stove + gas valve** (hazard / hot meals), fridge with microwave (spoils after the power cut), range hood |
+| LDK | dining table, kotatsu + hand-crank radio (clue at night), TV (clue, needs power), desk + laptop (clue), binoculars (clue by day), **bookshelf** (hazard), wall AC, floor-to-ceiling sliding windows (掃き出し窓) |
+| Bedroom 洋室 6畳 | bed (rest), **wardrobe** (hazard, falls across the bed head), phone on the bedside table (clue), built-in closet (loot), waist-height window, sliding doors (引き戸) to the LDK |
+| Balcony | AC outdoor unit, laundry poles, kick-through emergency partitions (隔て板) with their warning sign |
+| Outdoor corridor | railings, neighbour 304's door, our meter box (MB) in the alcove, stairwell at the east end |
+
+Interior doors open and close. The infected shove closed doors open, so a
+closed door doesn't stop them, but it does hide you and slow them.
 
 **Entrances** (attacked at night):
 
@@ -57,7 +69,7 @@ into the next attempt.
 | Front door (steel) | 300 | stairwell → corridor |
 | Balcony door (glass) | 120 | neighbours' balconies |
 | Bedroom window | 100 | neighbours' balconies |
-| Bathroom window | 70 | stairwell → corridor |
+| Bathroom window (barred) | 200 | stairwell → corridor |
 
 Reinforce up to level 3: +100 HP per level, costs 2/3/4 materials. Patch to full
 for 1 material. A breached entrance must be re-boarded (3 materials) with no
@@ -79,7 +91,7 @@ infected standing in it.
 - **Earthquakes:** day 1 afternoon (always), day 3 daytime, night 4. Unsecured
   tall furniture falls forward: 75 damage if you're in the way, fatal if you're
   asleep in its path.
-- **Gas:** if the main is open when a quake hits, a leak starts. Close it within
+- **Gas:** if the valve by the stove (ガス栓) is open when a quake hits, a leak starts. Close it within
   50 s or it explodes. Keeping the gas on lets you cook hot meals (+65 hunger
   instead of +35), so the risk buys you something.
 - **Water:** the taps stop at 06:00 on day 2. A filled bathtub holds 8 bottles.
@@ -154,7 +166,10 @@ clue set, the hazards and the theory answer. Ideas to discuss:
   maybe a supply run that risks a day.
 - The intercom: someone asks to be let in (sometimes it's a person).
 - Pushing furniture to block doors, as a tradeoff against securing it.
-- Camera: the current top-down cut-away suits planning. Consider a closer
-  third-person or first-person mode for nights.
+- An `apartment_shell.glb` from Blender (frames, wallpaper, flooring, tiles,
+  switches, sockets) is the biggest realism upgrade left.
+- Japanese gas meters (マイコンメーター) cut the gas automatically in a strong
+  quake. Resetting it from the meter box in the corridor could be a risky
+  daytime errand that brings back hot meals.
 - Balance pass with real playtests (all tuning constants are at the top of
   their scripts).

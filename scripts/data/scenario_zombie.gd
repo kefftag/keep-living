@@ -26,7 +26,7 @@ const CLUES := {
 	},
 	"prep_pamphlet": {
 		"title": "Ward disaster-prep booklet",
-		"text": "A booklet from the ward office, never opened until now. Three lines are circled in red pen:\n\n- Fill the bathtub while water still runs.\n- After shaking stops, close the gas main.\n- Fix tall furniture to the wall or ceiling.",
+		"text": "A booklet from the ward office, never opened until now. Three lines are circled in red pen:\n\n- Fill the bathtub while water still runs.\n- After shaking stops, close the gas valve.\n- Fix tall furniture to the wall or ceiling.",
 		"insight": "prepared",
 	},
 	"tv_shibuya": {

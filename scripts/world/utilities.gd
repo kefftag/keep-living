@@ -1,5 +1,5 @@
 extends "res://scripts/world/interactable.gd"
-## Small fixed fixtures: the gas stove + main valve, the kitchen tap,
+## Small fixed fixtures: the gas stove + its gas valve (ガス栓), the kitchen tap,
 ## the bathtub and the bed. One script, switched on `kind`, because each is
 ## only a few lines.
 
@@ -23,7 +23,7 @@ func get_prompt(alt: bool) -> String:
 				if Game.gas_valve_open and not Game.gas_leaking and Game.food > 0:
 					return "Cook a hot meal (1 food)"
 				return ""
-			return "Close the gas main" if Game.gas_valve_open else ""
+			return "Close the gas valve" if Game.gas_valve_open else ""
 		"tap":
 			if alt or not Game.water_running or _tap_uses() >= 2:
 				return ""
@@ -99,9 +99,9 @@ func perform(alt: bool) -> void:
 				Game.gas_valve_open = false
 				if Game.gas_leaking:
 					Game.gas_leaking = false
-					Game.say("You wrench the gas main shut. The smell slowly fades.", "good")
+					Game.say("You wrench the gas valve shut. The smell slowly fades.", "good")
 				else:
-					Game.say("You close the gas main. No more hot meals, but nothing to leak.", "info")
+					Game.say("You close the gas valve. No more hot meals, but nothing to leak.", "info")
 		"tap":
 			Game.tap_uses[Game.day] = _tap_uses() + 1
 			Game.water += 2

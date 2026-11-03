@@ -39,7 +39,7 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 8  # not each other: the balcony is too narrow to pass
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.27
+	cap.radius = 0.2  # must match the navmesh agent radius or they snag on door frames
 	cap.height = 1.65
 	shape.shape = cap
 	shape.position.y = 0.82
@@ -68,7 +68,7 @@ func _ready() -> void:
 	nav = NavigationAgent3D.new()
 	nav.path_desired_distance = 0.35
 	nav.target_desired_distance = 0.3
-	nav.radius = 0.27
+	nav.radius = 0.2
 	nav.height = 1.65
 	add_child(nav)
 
