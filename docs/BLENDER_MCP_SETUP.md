@@ -61,11 +61,23 @@ BLENDERMCP_ADDONS_DIR=~/Library/Application\ Support/Blender/4.2/scripts/addons 
 
 ## 3. Start it inside Blender
 
-In the 3D viewport press **N**, open the **MCP for Blender** tab, and click
-**Start MCP Server** and then **Connect to Claude**. While you're there,
-optionally tick **Poly Haven** (free CC0 assets), **Sketchfab** (huge model
-library; needs a free API key) and **Hyper3D Rodin** (text/image → 3D model;
-has a free trial key).
+1. Hover the mouse over the big 3D view (the grey grid with the default
+   cube). Press **N**. It only works while the mouse is over that view. Or
+   use the menu: **View → Sidebar**.
+2. A sidebar opens on the right with vertical tabs (Item, Tool, View...).
+   Click the **MCP for Blender** tab.
+   - No such tab? The add-on isn't enabled. Go to **Edit → Preferences →
+     Add-ons**, search "MCP" and tick **Interface: MCP for Blender**.
+3. It says **Not connected**. Click **Connect to MCP server**. It should change
+   to **Connected on port 9876**.
+4. Optional, in the same panel:
+   - **Poly Haven**: tick it (free CC0 models, textures and HDRIs).
+   - **Hyper3D Rodin**: tick it, then click **Set Free Trial API Key**.
+     This generates 3D models from text, which is how we'll get a real zombie.
+   - **Sketchfab**: tick it and paste an API key from
+     <https://sketchfab.com/settings/password> (free account).
+
+Leave Blender open with it connected while you use Claude.
 
 ## 4. Connect Claude Code to it
 
