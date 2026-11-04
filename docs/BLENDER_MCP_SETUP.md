@@ -30,9 +30,34 @@ uvx mcp-for-blender install-addon
 ```
 
 Then in Blender: **Edit → Preferences → Add-ons**, search for "MCP" and tick
-**Interface: MCP for Blender**. If it isn't listed, restart Blender, or click
-**Install…** and pick the `addon.py` from
-<https://github.com/ahujasid/blender-mcp>.
+**Interface: MCP for Blender**.
+
+**"Could not find a Blender user addons directory"?** Blender only creates that
+folder the first time it runs. Open Blender once, close it, and run the command
+again. If it still fails, install the add-on by hand:
+
+1. Download <https://raw.githubusercontent.com/ahujasid/blender-mcp/main/addon.py>
+   (right-click → Save Link As).
+2. Blender → **Edit → Preferences → Add-ons**. Click the **⌄** menu at the
+   top right → **Install from Disk…** (older Blender: an **Install…** button)
+   → pick `addon.py`.
+3. Tick **Interface: MCP for Blender**.
+
+Or point the installer at the folder (use your Blender version number):
+
+- macOS: `~/Library/Application Support/Blender/4.2/scripts/addons`
+- Windows: `%APPDATA%\Blender Foundation\Blender\4.2\scripts\addons`
+- Linux: `~/.config/blender/4.2/scripts/addons`
+
+For example, on macOS:
+
+```bash
+mkdir -p ~/Library/Application\ Support/Blender/4.2/scripts/addons
+```
+
+```bash
+BLENDERMCP_ADDONS_DIR=~/Library/Application\ Support/Blender/4.2/scripts/addons uvx mcp-for-blender install-addon
+```
 
 ## 3. Start it inside Blender
 
