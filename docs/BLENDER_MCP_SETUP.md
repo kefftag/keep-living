@@ -21,7 +21,12 @@ brew install uv
 On Windows use `winget install --id=astral-sh.uv -e`. On Linux use
 `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
-- Claude Code: <https://claude.com/claude-code>
+- Claude Code (terminal). It signs in separately from the desktop app, so
+  it can use a different account:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
 
 ## 2. Install the Blender add-on
 
