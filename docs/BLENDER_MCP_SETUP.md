@@ -79,30 +79,27 @@ BLENDERMCP_ADDONS_DIR=~/Library/Application\ Support/Blender/4.2/scripts/addons 
 
 Leave Blender open with it connected while you use Claude.
 
-## 4. Connect Claude Code to it
+## 4. Connect Claude to it
 
-In a terminal, inside your clone of this repo:
+The repo ships a `.mcp.json` that registers the Blender server, so any Claude
+Code session opened in this folder offers to connect to it. Approve
+**blender** when asked.
 
-```bash
-git clone https://github.com/kefftag/keep-living.git
-```
+**Claude Desktop app (Code tab):** open the app → **Code** → choose the
+`keep-living` folder on your computer (run it locally, not in the cloud).
 
-```bash
-cd keep-living
-```
-
-```bash
-claude mcp add blender uvx mcp-for-blender
-```
+**Terminal:** inside your clone of the repo, start Claude Code:
 
 ```bash
 claude
 ```
 
-Check it's connected by typing `/mcp` in Claude Code; `blender` should show
-as connected. (Claude Desktop instead: Settings → Developer → Edit Config,
-add `{"mcpServers": {"blender": {"command": "uvx", "args": ["mcp-for-blender"]}}}`,
-then fully quit and reopen the app.)
+Type `/mcp` to check that `blender` shows as connected.
+
+**Not connecting?** Desktop apps on macOS often can't find `uvx`. In a
+terminal run `which uvx`, then change `"command": "uvx"` in `.mcp.json` to that
+full path (for example `/opt/homebrew/bin/uvx`, or `/Users/you/.local/bin/uvx`).
+Don't commit that change.
 
 **Cautions**
 - Save your .blend first. Claude can run any Python inside Blender.
