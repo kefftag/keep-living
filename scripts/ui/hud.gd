@@ -750,17 +750,23 @@ func _on_message(text: String, kind: String) -> void:
 	var l := _label(text, UI.FS_FEED, colors.get(kind, C_TEXT))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(790, 0)
+	l.custom_minimum_size = Vector2(770, 0)
 	l.add_theme_constant_override("outline_size", 4)
-	feed.add_child(l)
+	# A dark caption strip behind each line, like TV subtitles, so green and
+	# white text stay readable over white walls and pale floors.
+	var plate := PanelContainer.new()
+	plate.add_theme_stylebox_override("panel", UI.box(UI.PROMPT_BG, Color(0, 0, 0, 0), 0, 6))
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(l)
+	feed.add_child(plate)
 	while feed.get_child_count() > 5:
 		var old := feed.get_child(0)
 		feed.remove_child(old)
 		old.queue_free()
-	var tween := l.create_tween()
+	var tween := plate.create_tween()
 	tween.tween_interval(5.0)
-	tween.tween_property(l, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(l.queue_free)
+	tween.tween_property(plate, "modulate:a", 0.0, 1.0)
+	tween.tween_callback(plate.queue_free)
 
 
 ## Danger: an NHK-style red テロップ strip with a white 速報 tag. Wipes in from
