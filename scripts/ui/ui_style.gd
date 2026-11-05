@@ -24,6 +24,28 @@ const BAR_THIRST := Color("#3D8FD6")
 const BAR_NOISE := Color("#C9CCCF")
 const BAR_TRACK := Color(1, 1, 1, 0.09)
 
+# Emergency / feedback
+const ALERT_DARK := Color("#8E0009")   # EEW banner flash low point
+const WHITE := Color("#FFFFFF")
+const HURT := Color("#B0000C")         # hurt vignette edge
+const PROMPT_BG := Color(0.06, 0.07, 0.08, 0.72)  # sign plate under the crosshair
+const KEYCAP_TEXT := INK
+const RING_TRACK := Color(1, 1, 1, 0.16)
+const OVERLAY_DIM := Color(0.02, 0.02, 0.04, 0.82)
+const OVERLAY_BG := Color(0.11, 0.12, 0.13, 0.98)
+
+# --- Type sizes (1600x900 canvas; nothing under 16) -----------------------------
+const FS_SMALL := 16     # controls chips, fine print
+const FS_HUD := 18       # stat labels, inventory, entrances
+const FS_PROMPT := 21
+const FS_FEED := 20
+const FS_BODY := 20      # overlay body text
+const FS_NOTE := 18      # overlay captions / dim notes
+const FS_BUTTON := 20
+const FS_HEADING := 34
+const FS_TITLE := 52
+const FS_CLOCK := 32
+
 # --- Fonts --------------------------------------------------------------------
 const FONT_UI := "res://assets/fonts/BIZUDPGothic-Regular.ttf"       # Morisawa BIZ UD, OFL
 const FONT_UI_BOLD := "res://assets/fonts/BIZUDPGothic-Bold.ttf"
@@ -84,7 +106,7 @@ static func bar_box(color: Color) -> StyleBoxFlat:
 static func build_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = ui_font()
-	t.default_font_size = 16
+	t.default_font_size = FS_HUD
 
 	t.set_color("font_color", "Label", PAPER)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.75))
@@ -105,7 +127,7 @@ static func build_theme() -> Theme:
 	# Buttons: navy plates like a station's information board. Hover and focus
 	# light the yellow sign edge; pressing stamps it red.
 	t.set_font("font", "Button", ui_font())
-	t.set_font_size("font_size", "Button", 17)
+	t.set_font_size("font_size", "Button", FS_BUTTON)
 	t.set_color("font_color", "Button", PAPER)
 	t.set_color("font_hover_color", "Button", PAPER)
 	t.set_color("font_focus_color", "Button", PAPER)
@@ -117,6 +139,77 @@ static func build_theme() -> Theme:
 
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
 	return t
+
+
+## Key cap: a small square sign-yellow plate with the key letter in ink.
+static func keycap_box() -> StyleBoxFlat:
+	var s := box(SIGN_YELLOW, Color(0, 0, 0, 0), 0, 4)
+	s.content_margin_left = 6
+	s.content_margin_right = 6
+	s.content_margin_top = 2
+	s.content_margin_bottom = 2
+	s.border_width_bottom = 3   # a little depth, like a real key
+	s.border_color = SIGN_YELLOW.darkened(0.45)
+	return s
+
+
+## Controls-hint chip around a key cap and its label.
+static func chip_box() -> StyleBoxFlat:
+	var s := box(Color(0.06, 0.07, 0.08, 0.6), Color(1, 1, 1, 0.1), 0, 4)
+	s.content_margin_left = 6
+	s.content_margin_right = 10
+	return s
+
+
+## NHK-style emergency strips (EEW banner, danger ticker).
+static func alert_box(pad: int = 10) -> StyleBoxFlat:
+	var s := box(ALERT_RED, Color(0, 0, 0, 0), 0, pad)
+	s.border_width_bottom = 3
+	s.border_color = WHITE
+	return s
+
+
+## The little white "速報" tag at the left of a ticker strip.
+static func tag_box() -> StyleBoxFlat:
+	var s := box(WHITE, Color(0, 0, 0, 0), 0, 4)
+	s.content_margin_left = 8
+	s.content_margin_right = 8
+	return s
+
+
+## Full-screen hurt vignette + low-health desaturation (canvas_item, reads the
+## screen behind it). `hurt` 0..1 is the bite flash, `low` 0..1 how far below
+## 30% health the player is.
+const VIGNETTE_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform float hurt = 0.0;
+uniform float low = 0.0;
+uniform vec4 hurt_color : source_color = vec4(0.69, 0.0, 0.05, 1.0);
+
+void fragment() {
+	vec3 c = textureLod(screen_tex, SCREEN_UV, 0.0).rgb;
+	vec2 d = SCREEN_UV - vec2(0.5);
+	d.x *= SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x;
+	float r = length(d);
+	float edge = smoothstep(0.32, 0.95, r);
+	float grey = dot(c, vec3(0.299, 0.587, 0.114));
+	c = mix(c, vec3(grey), low * 0.8);
+	c *= 1.0 - edge * (0.25 + 0.45 * low) * low;
+	float flash = edge * hurt;
+	c = mix(c, hurt_color.rgb, clamp(flash * 0.8 + edge * low * 0.18, 0.0, 0.85));
+	COLOR = vec4(c, 1.0);
+}
+"""
+
+
+static func vignette_material() -> ShaderMaterial:
+	var sh := Shader.new()
+	sh.code = VIGNETTE_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("hurt_color", HURT)
+	return m
 
 
 static func hex(c: Color) -> String:
