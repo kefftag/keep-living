@@ -33,6 +33,8 @@ var feed: VBoxContainer
 var prompt_box: PanelContainer
 var prompt_label: RichTextLabel
 var prompt_rows: Array = []   # [{row, cap, label}] for E and R
+var _prompt_sticker: PanelContainer
+var _prompt_target: Object
 var barricade_rows := {}
 
 # Step 2: alerts and feedback
@@ -51,7 +53,7 @@ var hint_bar: HBoxContainer
 var _hint_chips := {}         # hint id -> chip
 var _look_accum := 0.0
 
-const EEW_HEIGHT := 112.0
+const EEW_HEIGHT := 124.0
 const HINT_USES := 3
 ## Contextual controls: id -> [keys, label, actions]. Shown until each is used
 ## HINT_USES times (counts survive restarts within a session).
@@ -90,7 +92,22 @@ var _reading_queue: Array = []
 var _erase_armed := false
 var _erase_button: Button
 var _hud_boxes: Array = []  # HUD panel styles whose top rule turns red at night
-var _overlay_box_style: StyleBoxFlat
+var _ov_frame: PanelContainer       # steel sign frame (or red/green poster edge)
+var _ov_face: PanelContainer        # white sign face (or black poster band)
+var _ov_header: PanelContainer      # red header block with the bilingual title
+var _ov_header_style: StyleBoxFlat
+var _ov_scroll: ScrollContainer
+var _ov_frame_sign: StyleBox
+var _ov_frame_end: StyleBoxFlat
+var _ov_face_sign: StyleBox
+var _ov_face_end: StyleBox
+var _ov_sign_theme: Theme
+# Text roles inside the current overlay (ink on a sign, paper on a poster).
+var oc_text := UI.INK
+var oc_dim := UI.SIGN_DIM
+var oc_good := UI.JR_GREEN
+var oc_warn := UI.SIGN_WARN
+var oc_accent := UI.JR_GREEN
 var _shown_phase := -1
 
 
@@ -165,6 +182,30 @@ func _stat_row(parent: Node, title: String, bar: ProgressBar) -> HBoxContainer:
 	return row
 
 
+## Signage bilingual pattern (the SOS plate): big bold Japanese, small English
+## directly under it.
+func _bilingual(jp: String, en: String, jp_size: int, en_size: int, jp_color: Color, en_color: Color, align := HORIZONTAL_ALIGNMENT_LEFT, display := false) -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var j := _label(jp, jp_size, jp_color)
+	j.add_theme_font_override("font", UI.display_font() if display else UI.bold_font())
+	j.horizontal_alignment = align
+	var e := _label(en, en_size, en_color)
+	e.add_theme_font_override("font", UI.bold_font())
+	e.horizontal_alignment = align
+	v.add_child(j)
+	v.add_child(e)
+	return v
+
+
+func _expander() -> Control:
+	var c := Control.new()
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
+
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -217,22 +258,30 @@ func _build_status() -> void:
 
 
 func _build_barricade_panel() -> void:
-	var p := _panel()
+	# A backlit JR-style sign in a steel frame, with a red location sticker.
+	var p := UI.sign_panel(12)
+	p.theme = UI.build_sign_theme()
 	p.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	p.position = Vector2(-16, 16)
 	p.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	root.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
-	p.add_child(v)
-	v.add_child(_label("出入口  ENTRANCES", UI.FS_HUD, C_DIM))
+	UI.sign_face(p).add_child(v)
+	var head := HBoxContainer.new()
+	head.add_child(_bilingual("出入口", "Entrances", 26, UI.FS_SMALL, UI.JR_GREEN, UI.SIGN_DIM))
+	head.add_child(_expander())
+	var stk := UI.sticker("居室-03")
+	stk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	head.add_child(stk)
+	v.add_child(head)
 	for id in barricades:
 		var b = barricades[id]
-		var name_l := _label(b.display_name, UI.FS_HUD)
-		var bar := _bar(UI.BAR_NOISE, 250)
+		var name_l := _label(b.display_name, UI.FS_HUD, UI.INK)
+		var bar := _bar(UI.JR_GREEN, 260)
 		v.add_child(name_l)
 		v.add_child(bar)
-		barricade_rows[id] = {"label": name_l, "bar": bar}
+		barricade_rows[id] = {"label": name_l, "bar": bar, "fill": -1}
 
 
 func _build_feed() -> void:
@@ -288,12 +337,13 @@ func _draw_ring_cap(c: Control) -> void:
 	var frac: float = c.get_meta("fraction", 0.0)
 	var r := 23.0
 	if frac > 0.0:
-		c.draw_arc(centre, r, 0.0, TAU, 48, UI.RING_TRACK, 3.0, true)
-		c.draw_arc(centre, r, -PI * 0.5, -PI * 0.5 + TAU * frac, 48, UI.SIGN_YELLOW, 5.0, true)
+		c.draw_arc(centre, r, 0.0, TAU, 48, UI.SIGN_TRACK, 4.0, true)
+		c.draw_arc(centre, r, -PI * 0.5, -PI * 0.5 + TAU * frac, 48, UI.JR_GREEN, 5.0, true)
 	var half := 15.0
 	var rect := Rect2(centre - Vector2(half, half), Vector2(half, half) * 2.0)
 	c.draw_rect(Rect2(rect.position + Vector2(0, 3), rect.size), UI.SIGN_YELLOW.darkened(0.45))
 	c.draw_rect(rect, UI.SIGN_YELLOW)
+	c.draw_rect(Rect2(rect.position, rect.size + Vector2(0, 3)), UI.POSTER_BLACK, false, 1.5)
 	var font := UI.bold_font()
 	var fs := UI.FS_PROMPT
 	var key: String = c.get_meta("key", "")
@@ -305,33 +355,42 @@ func _draw_ring_cap(c: Control) -> void:
 func _build_prompt() -> void:
 	# Sign plate under the crosshair: target name + status, then one row per
 	# action with a key cap whose ring fills while the key is held.
-	prompt_box = _panel()
+	# A white backlit JR sign in a steel frame, with a location-code sticker.
+	prompt_box = UI.sign_panel(10)
+	prompt_box.theme = UI.build_sign_theme()
 	prompt_box.set_anchors_preset(Control.PRESET_CENTER)
-	prompt_box.position = Vector2(-290, 40)
-	prompt_box.custom_minimum_size = Vector2(580, 0)
-	prompt_box.add_theme_stylebox_override("panel", UI.box(UI.PROMPT_BG, Color(1, 1, 1, 0.08), 0, 10))
+	prompt_box.position = Vector2(-320, 40)
+	prompt_box.custom_minimum_size = Vector2(640, 0)
 	root.add_child(prompt_box)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 2)
-	prompt_box.add_child(v)
+	UI.sign_face(prompt_box).add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
 	prompt_label = RichTextLabel.new()
+	prompt_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	prompt_label.bbcode_enabled = true
 	prompt_label.fit_content = true
 	prompt_label.scroll_active = false
 	prompt_label.add_theme_font_size_override("normal_font_size", UI.FS_PROMPT)
 	prompt_label.add_theme_font_size_override("bold_font_size", UI.FS_PROMPT)
 	prompt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(prompt_label)
+	head.add_child(prompt_label)
+	_prompt_sticker = UI.sticker("")
+	_prompt_sticker.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	head.add_child(_prompt_sticker)
 	for key in ["E", "R"]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cap := _ring_cap(key)
 		row.add_child(cap)
-		var hold := _label("長押し", UI.FS_PROMPT, C_WARN)
+		var hold := _label("長押し", UI.FS_PROMPT, UI.JR_GREEN)
+		hold.add_theme_font_override("font", UI.bold_font())
 		hold.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(hold)
-		var l := _label("", UI.FS_PROMPT)
+		var l := _label("", UI.FS_PROMPT, UI.INK)
 		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -447,19 +506,45 @@ func _build_eew() -> void:
 	_eew_style = UI.alert_box(12)
 	eew_banner.add_theme_stylebox_override("panel", _eew_style)
 	root.add_child(eew_banner)
-	var v := VBoxContainer.new()
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_theme_constant_override("separation", 4)
-	eew_banner.add_child(v)
-	var l1 := _label("緊急地震速報  EARTHQUAKE EARLY WARNING", 38, UI.WHITE)
-	l1.add_theme_font_override("font", UI.bold_font())
-	l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var l2 := _label("強い揺れに警戒  Strong shaking expected. Take cover.", 24, UI.WHITE)
-	l2.add_theme_font_override("font", UI.bold_font())
-	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(l1)
-	v.add_child(l2)
+	# Poster style: a starburst "!", 緊急地震速報 in heavy yellow lettering with
+	# black and white strokes, English small under each Japanese line.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 22)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	eew_banner.add_child(row)
+	row.add_child(_bang(Vector2(104, 96)))
+	var left := VBoxContainer.new()
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	left.add_theme_constant_override("separation", -4)
+	left.add_child(UI.poster_label("緊急地震速報", 56, UI.SIGN_YELLOW, 4, UI.WHITE, 3))
+	var en1 := _label("EARTHQUAKE EARLY WARNING", 21, UI.WHITE)
+	en1.add_theme_font_override("font", UI.bold_font())
+	en1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	left.add_child(en1)
+	row.add_child(left)
+	var right := VBoxContainer.new()
+	right.alignment = BoxContainer.ALIGNMENT_CENTER
+	right.add_theme_constant_override("separation", 0)
+	var jp2 := _label("強い揺れに警戒", 34, UI.WHITE)
+	jp2.add_theme_font_override("font", UI.bold_font())
+	jp2.add_theme_constant_override("outline_size", 6)
+	jp2.add_theme_color_override("font_outline_color", UI.POSTER_BLACK)
+	right.add_child(jp2)
+	var en2 := _label("Strong shaking expected. Take cover.", 21, UI.WHITE)
+	en2.add_theme_font_override("font", UI.bold_font())
+	right.add_child(en2)
+	row.add_child(right)
+	row.add_child(_bang(Vector2(104, 96)))
 	eew_banner.visible = false
+
+
+## A starburst with a poster "!" in it (the red 危険 burst, in white so it
+## reads on a red banner).
+func _bang(sz: Vector2, fill: Color = UI.WHITE, mark: Color = UI.ALERT_RED) -> Control:
+	var burst := UI.starburst(sz, fill, UI.POSTER_BLACK, 14)
+	burst.add_child(UI.poster_label("!", int(sz.y * 0.55), mark, 6, UI.WHITE, 0))
+	return burst
 
 
 func _on_earthquake_warning() -> void:
@@ -595,7 +680,10 @@ func _refresh_prompt() -> void:
 		prompt_box.visible = false
 		return
 	prompt_box.visible = true
-	prompt_label.text = "[b]%s[/b]  [color=%s]%s[/color]" % [f.display_name, UI.hex(C_DIM), f.get_status()]
+	prompt_label.text = "[b]%s[/b]  [color=%s]%s[/color]" % [f.display_name, UI.hex(UI.SIGN_DIM), f.get_status()]
+	if f != _prompt_target:
+		_prompt_target = f
+		_prompt_sticker.get_child(0).text = _location_code(f)
 	var frac: float = player.hold_fraction()
 	var alt_held: bool = player.get("hold_alt") == true
 	for i in prompt_rows.size():
@@ -610,6 +698,24 @@ func _refresh_prompt() -> void:
 			cap.queue_redraw()
 
 
+## A made-up station-style location code for the sticker on the prompt sign
+## (like 横浜マー11): room by position, then a stable number per object.
+func _location_code(f: Node) -> String:
+	var p: Vector3 = f.global_position if f is Node3D else Vector3.ZERO
+	var room := "居室"   # LDK
+	if p.z < 0.0:
+		room = "バル"    # balcony
+	elif p.z < 3.64:
+		room = "洋室" if p.x < 2.73 else "居室"
+	elif p.x < 2.73:
+		room = "水回"    # washroom, bath, toilet
+	elif p.x < 3.64 or (p.z > 6.37 and p.x < 4.55):
+		room = "玄関"    # hall and genkan
+	else:
+		room = "台所"
+	return "%s-%02d" % [room, absi(hash(str(f.name))) % 90 + 10]
+
+
 func _refresh_barricades() -> void:
 	var blink := int(Time.get_ticks_msec() / 250) % 2 == 0
 	for id in barricade_rows:
@@ -621,12 +727,17 @@ func _refresh_barricades() -> void:
 		bar.value = b.hp
 		var status := "BREACHED" if b.broken else "%d/%d  L%d" % [int(b.hp), int(b.max_hp), b.level]
 		l.text = "%s  %s" % [b.display_name, status]
-		var c := C_TEXT
+		var c := UI.INK
 		if b.broken:
-			c = C_DANGER
+			c = UI.ALERT_RED
 		elif b.is_under_attack():
-			c = C_DANGER if blink else C_WARN
+			c = UI.ALERT_RED if blink else UI.SIGN_WARN
 		l.add_theme_color_override("font_color", c)
+		var ratio: float = 0.0 if b.broken else b.hp / max(1.0, b.max_hp)
+		var tier := 0 if ratio > 0.6 else (1 if ratio > 0.3 else 2)
+		if tier != row["fill"]:
+			row["fill"] = tier
+			bar.add_theme_stylebox_override("fill", UI.bar_box([UI.JR_GREEN, UI.SIGN_YELLOW.darkened(0.1), UI.ALERT_RED][tier]))
 
 
 # --- Message feed ------------------------------------------------------------------------
@@ -663,12 +774,9 @@ func _ticker_message(text: String) -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.add_child(row)
 	var tag := PanelContainer.new()
-	tag.add_theme_stylebox_override("panel", UI.tag_box())
+	tag.add_theme_stylebox_override("panel", UI.band_box(4))
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var tag_l := _label("速報", UI.FS_FEED, UI.ALERT_RED)
-	tag_l.add_theme_font_override("font", UI.bold_font())
-	tag_l.add_theme_constant_override("outline_size", 0)
-	tag.add_child(tag_l)
+	tag.add_child(UI.poster_label("危険", 26, UI.SIGN_YELLOW, 0, UI.WHITE, 0))
 	row.add_child(tag)
 	var l := _label(text, 22, UI.WHITE)
 	l.add_theme_font_override("font", UI.bold_font())
@@ -693,6 +801,10 @@ func _ticker_message(text: String) -> void:
 
 
 # --- Overlays ---------------------------------------------------------------------------------
+# Calm screens (intro, clue, journal, pause, manual) are backlit JR-style sign
+# panels: steel frame, white face, red SOS-style header block with the title
+# in big Japanese over small English. Death and rescue are poster screens:
+# black band, heavy lettering on a starburst.
 
 func _build_overlay() -> void:
 	overlay = ColorRect.new()
@@ -703,26 +815,64 @@ func _build_overlay() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
-	var p := PanelContainer.new()
-	_overlay_box_style = UI.box(UI.OVERLAY_BG, UI.SIGN_YELLOW, 4, 24)
-	p.add_theme_stylebox_override("panel", _overlay_box_style)
-	p.custom_minimum_size = Vector2(860, 0)
-	center.add_child(p)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(812, 0)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	p.add_child(scroll)
+	_ov_frame = UI.sign_panel(0)
+	_ov_frame.custom_minimum_size = Vector2(860, 0)
+	_ov_frame_sign = _ov_frame.get_theme_stylebox("panel")
+	_ov_frame_end = UI.box(UI.ALERT_RED, UI.POSTER_BLACK, 0, 6)
+	center.add_child(_ov_frame)
+	_ov_face = UI.sign_face(_ov_frame)
+	_ov_face_sign = _ov_face.get_theme_stylebox("panel")
+	_ov_face_end = UI.band_box(0)
+	_ov_sign_theme = UI.build_sign_theme()
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	_ov_face.add_child(col)
+	_ov_header = PanelContainer.new()
+	_ov_header_style = UI.header_box(UI.ALERT_RED)
+	_ov_header.add_theme_stylebox_override("panel", _ov_header_style)
+	col.add_child(_ov_header)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 22)
+	col.add_child(margin)
+	_ov_scroll = ScrollContainer.new()
+	_ov_scroll.custom_minimum_size = Vector2(812, 0)
+	_ov_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(_ov_scroll)
 	overlay_box = VBoxContainer.new()
 	overlay_box.add_theme_constant_override("separation", 10)
 	overlay_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(overlay_box)
-	scroll.set_meta("panel", p)
-	overlay.set_meta("scroll", scroll)
+	_ov_scroll.add_child(overlay_box)
 
 
-func _open(kind: String) -> void:
+## Clear the overlay and show it as `kind`. Calm screens get the sign look and
+## a header (`jp` big, `en` small under it); "end" gets the poster look.
+func _open(kind: String, jp: String = "", en: String = "") -> void:
 	overlay_kind = kind
-	_overlay_box_style.border_color = UI.HANKO if kind == "end" else UI.SIGN_YELLOW
+	var poster := kind == "end"
+	_ov_frame.add_theme_stylebox_override("panel", _ov_frame_end if poster else _ov_frame_sign)
+	_ov_face.add_theme_stylebox_override("panel", _ov_face_end if poster else _ov_face_sign)
+	_ov_face.theme = null if poster else _ov_sign_theme
+	if poster:
+		oc_text = UI.PAPER
+		oc_dim = UI.DIM
+		oc_good = UI.LINE_GREEN
+		oc_warn = UI.SIGN_YELLOW
+		oc_accent = UI.SIGN_YELLOW
+	else:
+		oc_text = UI.INK
+		oc_dim = UI.SIGN_DIM
+		oc_good = UI.JR_GREEN
+		oc_warn = UI.SIGN_WARN
+		oc_accent = UI.JR_GREEN
+	for c in _ov_header.get_children():
+		_ov_header.remove_child(c)
+		c.queue_free()
+	_ov_header.visible = jp != ""
+	if jp != "":
+		var title := _bilingual(jp, en, 42, 20, UI.WHITE, UI.WHITE)
+		title.add_theme_constant_override("separation", 0)
+		_ov_header.add_child(title)
 	for c in overlay_box.get_children():
 		overlay_box.remove_child(c)
 		c.queue_free()
@@ -734,10 +884,10 @@ func _open(kind: String) -> void:
 func _fit_overlay() -> void:
 	# Let short panels shrink; cap tall ones (journal) and scroll.
 	await get_tree().process_frame
-	var scroll: ScrollContainer = overlay.get_meta("scroll")
 	var want: float = overlay_box.get_combined_minimum_size().y
-	var max_h: float = root.get_viewport_rect().size.y - 120.0
-	scroll.custom_minimum_size.y = min(want, max_h)
+	var head: float = _ov_header.get_combined_minimum_size().y if _ov_header.visible else 0.0
+	var max_h: float = root.get_viewport_rect().size.y - 140.0 - head
+	_ov_scroll.custom_minimum_size.y = min(want, max_h)
 
 
 func _close() -> void:
@@ -750,16 +900,53 @@ func _close() -> void:
 		_show_reading(next[0], next[1])
 
 
-func _text(text: String, font_size: int = UI.FS_BODY, color: Color = C_TEXT) -> Label:
-	var l := _label(text, font_size, color)
+func _text(text: String, font_size: int = UI.FS_BODY, color: Color = Color.TRANSPARENT) -> Label:
+	var l := _label(text, font_size, oc_text if color.a == 0.0 else color)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(790, 0)
 	return l
 
 
-func _heading(text: String, font_size: int = UI.FS_HEADING, color: Color = C_TEXT) -> Label:
-	var l := _label(text, font_size, color)
+func _heading(text: String, font_size: int = UI.FS_HEADING, color: Color = Color.TRANSPARENT) -> Label:
+	var l := _label(text, font_size, oc_text if color.a == 0.0 else color)
 	l.add_theme_font_override("font", UI.bold_font())
+	return l
+
+
+## Section heading on a sign: big Japanese, small English under it, green rule.
+func _section(jp: String, en: String) -> Control:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	v.add_child(_spacer(0))
+	v.add_child(_bilingual(jp, en, UI.FS_HEADING, UI.FS_NOTE, oc_accent, oc_dim))
+	var rule := ColorRect.new()
+	rule.color = oc_accent
+	rule.custom_minimum_size = Vector2(0, 3)
+	v.add_child(rule)
+	return v
+
+
+## Poster title: heavy `jp` lettering (yellow, black and white strokes) on a
+## starburst, with `en` in heavy display type under it.
+func _poster_title(jp: String, en: String, burst: Color) -> Control:
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 0)
+	var b := UI.starburst(Vector2(360, 190), burst, UI.POSTER_BLACK, 18)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b.add_child(UI.poster_label(jp, 84, UI.SIGN_YELLOW))
+	v.add_child(b)
+	var e := UI.poster_label(en, 40, UI.WHITE, 7, UI.WHITE, 0)
+	e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(e)
+	return v
+
+
+## Poster body: yellow heavy line on the black band.
+func _poster_line(text: String, size: int = 26) -> Label:
+	var l := _text(text, size, UI.SIGN_YELLOW)
+	l.add_theme_font_override("font", UI.bold_font())
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 
 
@@ -802,10 +989,8 @@ func _unhandled_input(event: InputEvent) -> void:
 # Intro ------------------------------------------------------------------------
 
 func _show_intro() -> void:
-	_open("intro")
-	overlay_box.add_child(_heading("KEEP LIVING", UI.FS_TITLE, C_ACCENT))
-	overlay_box.add_child(_label("生きていく", 24, C_DIM))
-	overlay_box.add_child(_label("Scenario %s" % Scenario.TITLE.to_upper(), UI.FS_NOTE, C_DIM))
+	_open("intro", "生きていく", "KEEP LIVING")
+	overlay_box.add_child(_label("Scenario %s" % Scenario.TITLE.to_upper(), UI.FS_NOTE, oc_dim))
 	var body := ""
 	if Meta.runs == 0:
 		body = "Tokyo. A third-floor 1LDK in a quiet part of the city.\n\nIt's 07:58, and your phone is screaming. Outside, something has happened. You don't know what yet.\n\nStay inside. Make this apartment safe. Find out what's going on. Keep living."
@@ -816,14 +1001,14 @@ func _show_intro() -> void:
 	overlay_box.add_child(_text(body, 22))
 	var known := Meta.known_clue_list(Scenario.ID).size()
 	if Meta.runs > 0:
-		overlay_box.add_child(_text("You remember %d of %d clues.  Lives lived: %d  Best: day %d" % [known, Scenario.CLUES.size(), Meta.runs, Meta.best_day], UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("You remember %d of %d clues.  Lives lived: %d  Best: day %d" % [known, Scenario.CLUES.size(), Meta.runs, Meta.best_day], UI.FS_BODY, oc_dim))
 	if Meta.perks.size() > 0:
 		var names: Array = []
 		for p in Meta.perks:
 			names.append(Perks.PERKS[p]["title"])
-		overlay_box.add_child(_text("Echoes: " + ", ".join(names), UI.FS_BODY, C_GOOD))
-	overlay_box.add_child(_text("Survive %d nights. Days: scavenge, secure and barricade. Nights: they come for the doors and windows.\nAnything you don't secure can kill you too." % Scenario.NIGHTS_TO_SURVIVE, UI.FS_BODY, C_DIM))
-	overlay_box.add_child(_button("Get up  [E]", _start_run))
+		overlay_box.add_child(_text("Echoes: " + ", ".join(names), UI.FS_BODY, oc_good))
+	overlay_box.add_child(_text("Survive %d nights. Days: scavenge, secure and barricade. Nights: they come for the doors and windows.\nAnything you don't secure can kill you too." % Scenario.NIGHTS_TO_SURVIVE, UI.FS_BODY, oc_dim))
+	overlay_box.add_child(_button("起きる  Get up  [E]", _start_run))
 	_fit_overlay()
 
 
@@ -845,69 +1030,68 @@ func _on_clue_found(clue_id: String, is_new: bool) -> void:
 func _show_reading(clue_id: String, is_new: bool) -> void:
 	var clue: Dictionary = Scenario.CLUES[clue_id]
 	Sfx.play("paper", null, -4.0)
-	_open("reading")
+	_open("reading", "手がかり", "Clue")
 	overlay_box.add_child(_heading(clue["title"], UI.FS_HEADING))
 	if is_new:
-		overlay_box.add_child(_label("NEW. You'll remember this, even next time.", UI.FS_NOTE, C_GOOD))
+		overlay_box.add_child(_label("NEW. You'll remember this, even next time.", UI.FS_NOTE, oc_good))
 	else:
-		overlay_box.add_child(_label("You remember this.", UI.FS_NOTE, C_DIM))
+		overlay_box.add_child(_label("You remember this.", UI.FS_NOTE, oc_dim))
 	overlay_box.add_child(_text(clue["text"], 22))
 	var insight_id: String = clue.get("insight", "")
 	if insight_id != "":
 		var ins: Dictionary = Scenario.INSIGHTS[insight_id]
-		overlay_box.add_child(_text("Insight: %s. %s" % [ins["title"], ins["desc"]], UI.FS_BODY, C_GOOD))
-	overlay_box.add_child(_button("Close  [E]", _close))
+		overlay_box.add_child(_text("Insight: %s. %s" % [ins["title"], ins["desc"]], UI.FS_BODY, oc_good))
+	overlay_box.add_child(_button("閉じる  Close  [E]", _close))
 	_fit_overlay()
 
 
 # Journal ----------------------------------------------------------------------------
 
 func _show_journal() -> void:
-	_open("journal")
-	overlay_box.add_child(_heading("手帳  Journal", 44))
-	overlay_box.add_child(_label("What you've pieced together (this persists through death)", UI.FS_NOTE, C_DIM))
-	overlay_box.add_child(_heading("手がかり  Clues", UI.FS_HEADING, C_ACCENT))
+	_open("journal", "手帳", "Journal")
+	overlay_box.add_child(_label("What you've pieced together (this persists through death)", UI.FS_NOTE, oc_dim))
+	overlay_box.add_child(_section("手がかり", "Clues"))
 	for clue_id in Scenario.CLUES:
 		var clue: Dictionary = Scenario.CLUES[clue_id]
 		if Meta.knows_clue(Scenario.ID, clue_id):
 			var tag := "  (new this life)" if clue_id in Game.run_new_clues else ""
-			overlay_box.add_child(_label(clue["title"] + tag, 22, C_TEXT))
-			overlay_box.add_child(_text(clue["text"], UI.FS_BODY, C_DIM))
+			overlay_box.add_child(_heading(clue["title"] + tag, 22))
+			overlay_box.add_child(_text(clue["text"], UI.FS_BODY, oc_dim))
 		else:
-			overlay_box.add_child(_label("???", 22, C_DIM))
-	overlay_box.add_child(_heading("気づき  Insights", UI.FS_HEADING, C_ACCENT))
+			overlay_box.add_child(_label("???", 22, oc_dim))
+	overlay_box.add_child(_section("気づき", "Insights"))
 	var any := false
 	for insight_id in Scenario.INSIGHTS:
 		if Game.has_insight(insight_id):
 			any = true
 			var ins: Dictionary = Scenario.INSIGHTS[insight_id]
-			overlay_box.add_child(_text("%s: %s" % [ins["title"], ins["desc"]], UI.FS_BODY, C_GOOD))
+			overlay_box.add_child(_text("%s: %s" % [ins["title"], ins["desc"]], UI.FS_BODY, oc_good))
 	if not any:
-		overlay_box.add_child(_text("None yet. Clues teach you things that stay useful.", UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("None yet. Clues teach you things that stay useful.", UI.FS_BODY, oc_dim))
 
-	overlay_box.add_child(_heading("何が起きている?  What is happening?", UI.FS_HEADING, C_ACCENT))
+	overlay_box.add_child(_section("何が起きている?", "What is happening?"))
 	if Meta.is_theory_solved(Scenario.ID):
-		overlay_box.add_child(_text("You know what this is: an infection. The bitten turn. (+15% damage)", UI.FS_BODY, C_GOOD))
+		overlay_box.add_child(_text("You know what this is: an infection. The bitten turn. (+15% damage)", UI.FS_BODY, oc_good))
 	elif Game.can_submit_theory():
-		overlay_box.add_child(_text("You have enough to make a guess. You get one guess per life.", UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("You have enough to make a guess. You get one guess per life.", UI.FS_BODY, oc_dim))
 		for t in Scenario.THEORIES:
 			var tid: String = t["id"]
 			overlay_box.add_child(_button(t["label"], func():
 				Game.submit_theory(tid)
 				_close()))
 	elif Game.theory_attempted:
-		overlay_box.add_child(_text("You've already guessed this life.", UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("You've already guessed this life.", UI.FS_BODY, oc_dim))
 	else:
-		overlay_box.add_child(_text("You need at least %d clues before you can name it." % Scenario.THEORY_MIN_CLUES, UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("You need at least %d clues before you can name it." % Scenario.THEORY_MIN_CLUES, UI.FS_BODY, oc_dim))
 
-	overlay_box.add_child(_heading("残響  Echoes", UI.FS_HEADING, C_ACCENT))
+	overlay_box.add_child(_section("残響", "Echoes"))
 	if Meta.perks.is_empty():
-		overlay_box.add_child(_text("None yet. Each death leaves you a small advantage.", UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("None yet. Each death leaves you a small advantage.", UI.FS_BODY, oc_dim))
 	for p in Meta.perks:
-		overlay_box.add_child(_text("%s: %s" % [Perks.PERKS[p]["title"], Perks.PERKS[p]["desc"]], UI.FS_BODY, C_GOOD))
+		overlay_box.add_child(_text("%s: %s" % [Perks.PERKS[p]["title"], Perks.PERKS[p]["desc"]], UI.FS_BODY, oc_good))
 	overlay_box.add_child(_text("Lives: %d   Deaths: %d   Rescues: %d   Best: day %d   Infected put down this life: %d" % [
-		Meta.runs, Meta.deaths, Meta.wins, Meta.best_day, Game.zombies_killed], UI.FS_BODY, C_DIM))
-	overlay_box.add_child(_button("Close  [J]", _close))
+		Meta.runs, Meta.deaths, Meta.wins, Meta.best_day, Game.zombies_killed], UI.FS_BODY, oc_dim))
+	overlay_box.add_child(_button("閉じる  Close  [J]", _close))
 	_fit_overlay()
 
 
@@ -915,22 +1099,20 @@ func _show_journal() -> void:
 
 func _show_pause() -> void:
 	_erase_armed = false
-	_open("pause")
-	overlay_box.add_child(_heading("一時停止  Paused", 44))
-	overlay_box.add_child(_button("Resume", _close))
-	overlay_box.add_child(_button("Journal", _show_journal))
+	_open("pause", "一時停止", "Paused")
+	overlay_box.add_child(_button("再開  Resume", _close))
+	overlay_box.add_child(_button("手帳  Journal", _show_journal))
 	overlay_box.add_child(_button("取扱説明書  Manual", _show_manual))
-	overlay_box.add_child(_button("Restart this life", _restart))
-	_erase_button = _button("Erase all progress", _on_erase_pressed)
+	overlay_box.add_child(_button("やり直す  Restart this life", _restart))
+	_erase_button = _button("全消去  Erase all progress", _on_erase_pressed)
 	overlay_box.add_child(_erase_button)
-	overlay_box.add_child(_button("Quit", func(): get_tree().quit()))
+	overlay_box.add_child(_button("終了  Quit", func(): get_tree().quit()))
 	_fit_overlay()
 
 
 func _show_manual() -> void:
-	_open("manual")
-	overlay_box.add_child(_heading("取扱説明書  Manual", 44))
-	overlay_box.add_child(_label("Controls", UI.FS_NOTE, C_DIM))
+	_open("manual", "取扱説明書", "Manual")
+	overlay_box.add_child(_bilingual("操作方法", "Controls", 26, UI.FS_NOTE, oc_accent, oc_dim))
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 24)
@@ -942,12 +1124,12 @@ func _show_manual() -> void:
 		for k in entry[0]:
 			keys.add_child(_keycap(k, UI.FS_BODY))
 		grid.add_child(keys)
-		var l := _label(entry[1], UI.FS_BODY)
+		var l := _label(entry[1], UI.FS_BODY, oc_text)
 		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		grid.add_child(l)
 	overlay_box.add_child(grid)
-	overlay_box.add_child(_text("Hold E or R on something to use it; the ring around the key fills as you work. Holding takes time and makes noise.", UI.FS_NOTE, C_DIM))
-	overlay_box.add_child(_button("Back  [Esc]", _show_pause))
+	overlay_box.add_child(_text("Hold E or R on something to use it; the ring around the key fills as you work. Holding takes time and makes noise.", UI.FS_NOTE, oc_dim))
+	overlay_box.add_child(_button("戻る  Back  [Esc]", _show_pause))
 	_fit_overlay()
 
 
@@ -971,16 +1153,20 @@ func _restart() -> void:
 func _on_player_died(cause: String) -> void:
 	await get_tree().create_timer(1.4).timeout
 	_open("end")
-	overlay_box.add_child(_heading("YOU DIED", UI.FS_TITLE, C_DANGER))
-	overlay_box.add_child(_text(cause, 24))
-	overlay_box.add_child(_text("Day %d, %s.   Clues learned this life: %d   Infected put down: %d" % [
-		Game.day, Game.clock_string(), Game.run_new_clues.size(), Game.zombies_killed], UI.FS_BODY, C_DIM))
+	_ov_frame_end.bg_color = UI.ALERT_RED
+	overlay_box.add_child(_poster_title("死亡", "YOU DIED", UI.ALERT_RED))
+	overlay_box.add_child(_poster_line(cause))
+	var stats := _text("Day %d, %s.   Clues learned this life: %d   Infected put down: %d" % [
+		Game.day, Game.clock_string(), Game.run_new_clues.size(), Game.zombies_killed], UI.FS_BODY, UI.PAPER)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	overlay_box.add_child(stats)
 	var choices := Game.roll_perk_choices()
 	if choices.is_empty():
-		overlay_box.add_child(_text("You already carry every Echo there is.", UI.FS_BODY, C_DIM))
+		overlay_box.add_child(_text("You already carry every Echo there is.", UI.FS_BODY, oc_dim))
 		overlay_box.add_child(_button("Wake up again", _restart))
 	else:
-		overlay_box.add_child(_heading("Choose an Echo to carry into your next life", 28, C_ACCENT))
+		var head := _bilingual("残響を選ぶ", "Choose an Echo to carry into your next life", 30, UI.FS_NOTE, UI.SIGN_YELLOW, UI.PAPER, HORIZONTAL_ALIGNMENT_CENTER)
+		overlay_box.add_child(head)
 		for perk_id in choices:
 			var perk: Dictionary = Perks.PERKS[perk_id]
 			var pid: String = perk_id
@@ -1002,11 +1188,14 @@ func _on_run_won() -> void:
 		add_child(heli)
 		heli.play()
 	_open("end")
-	overlay_box.add_child(_heading("RESCUED", UI.FS_TITLE, C_GOOD))
-	overlay_box.add_child(_text("Dawn, day %d. Rotor noise grows over the rooftops, and a rope ladder drops past your balcony.\n\nYou kept living." % Game.day, 22))
+	_ov_frame_end.bg_color = UI.JR_GREEN
+	overlay_box.add_child(_poster_title("救出", "RESCUED", UI.JR_GREEN))
+	var story := _text("Dawn, day %d. Rotor noise grows over the rooftops, and a rope ladder drops past your balcony.\n\nYou kept living." % Game.day, 22)
+	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	overlay_box.add_child(story)
 	overlay_box.add_child(_text("Clues remembered: %d / %d.   Lives it took: %d.   Infected put down this life: %d" % [
-		Meta.known_clue_list(Scenario.ID).size(), Scenario.CLUES.size(), Meta.runs, Game.zombies_killed], UI.FS_BODY, C_DIM))
+		Meta.known_clue_list(Scenario.ID).size(), Scenario.CLUES.size(), Meta.runs, Game.zombies_killed], UI.FS_BODY, oc_dim))
 	if Meta.known_clue_list(Scenario.ID).size() < Scenario.CLUES.size():
-		overlay_box.add_child(_text("There's still more to learn about what happened.", UI.FS_BODY, C_WARN))
+		overlay_box.add_child(_poster_line("There's still more to learn about what happened.", 22))
 	overlay_box.add_child(_button("Live it again", _restart))
 	_fit_overlay()

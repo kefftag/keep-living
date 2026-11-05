@@ -81,6 +81,38 @@ and `_button` per-node overrides with theme type variations: `Paper`, `Sign`,
 | Death + Echo choice | **Timecard punched out** | A timecard slides into a clock and stamps `退勤 21:53 OUT` in red. The cause is typed on the card. His name field is blurred (see Decisions). The Echo choice is three 名刺 business cards from past selves, with the name and company blurred and the Echo itself ("3rd life · Night 2 · *Prepared*…") sharp; click one to keep it. |
 | Rescue / win | **Last train notice** | The station board shows "本日の運行は終了しました": service has ended for today, and so has the nightmare. Shows stats and "Live it again". |
 
+## Signage references
+
+Three photos the art direction now leans on, and the rules taken from each:
+
+1. **Tokyo Metro manner poster** (かけこみ乗車は危険です!!). Super-heavy, chunky
+   display Japanese: 危険 in yellow fill with a thick black stroke and a white
+   outer stroke, inside a red jagged starburst. Flat comic colours (navy, teal,
+   yellow, red), and a black bottom band with yellow heavy text over white
+   regular text.
+   *Rule:* danger and alarm moments use **Dela Gothic One** with layered strokes
+   (`UI.poster_label`) and red starbursts (`UI.starburst`): the EEW banner,
+   the 危険 tag on the danger ticker, and the 死亡 / YOU DIED and 救出 / RESCUED
+   screens, which sit on a black poster band. Yellow on black means warning.
+2. **JR platform sign** (線路に物を落とされた方は…). A backlit white panel in a
+   brushed-steel frame with screws, solid-black pictograms, centred green
+   Gothic text, and a little red location-code sticker in the corner
+   (横浜マー11).
+   *Rule:* calm, informational UI is a sign panel (`UI.sign_panel`): white face,
+   steel frame, ink or JR-green (`UI.JR_GREEN`) BIZ UDPGothic text, and a red
+   sticker (`UI.sticker`). The prompt plate (sticker shows a room code such as
+   台所-20), the entrances panel (居室-03), and the intro, clue, journal,
+   pause and manual screens. The stat panel stays dark, because white text
+   bars over a white apartment wall read worse.
+3. **SOS emergency-stop plate.** A vertical white plate with a solid red
+   header block (white bold SOS), a black pictogram, big black bold
+   非常停止ボタン with small English under it, and a red "!".
+   *Rule:* the bilingual pattern is **big Japanese with small English directly
+   under it**, not side by side, wherever there's room: overlay titles, panel
+   titles, journal sections. Overlay titles sit in a red header block
+   (`UI.header_box`). Warnings get a red "!" in a starburst. Compact one-line
+   rows (stats, buttons) keep `JP  English` on one line.
+
 ## Build order
 
 1. **Foundation** (small): fonts in `assets/fonts/`, plus `ui_style.gd` with the palette,
