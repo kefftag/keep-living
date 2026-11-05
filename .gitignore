@@ -6,3 +6,5 @@ export_presets.cfg
 # Blender
 *.blend1
 *.blend@
+# Claude Code worktrees
+.claude/worktrees/

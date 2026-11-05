@@ -13,6 +13,7 @@ const SWING_RANGE := 1.6
 const SWING_COOLDOWN := 0.6
 const MOUSE_SENS := 0.0022
 const LOOK_MASK := 1 | 2 | 16 | 32  # world, entrances, doors, breached entrances
+const VIEWMODEL_POS := Vector3(0.26, -0.3, -0.42)  # swing pivot, relative to the camera
 
 var focus: Node = null
 var hold_progress := 0.0
@@ -59,32 +60,44 @@ func _ready() -> void:
 	camera.current = true
 	head.add_child(camera)
 
-	# Viewmodel: a forearm and, once found, the metal bat.
+	# Viewmodel: his own forearm and fist, or both hands on the metal bat once
+	# found. fp_fist / fp_bat are posed in Blender from the protagonist model
+	# with the eye at their origin, so they sit at -VIEWMODEL_POS under the pivot.
 	viewmodel = Node3D.new()
-	viewmodel.position = Vector3(0.26, -0.3, -0.42)
+	viewmodel.position = VIEWMODEL_POS
 	camera.add_child(viewmodel)
 	fist = Node3D.new()
 	viewmodel.add_child(fist)
-	fist.add_child(Props.box(Vector3(0.055, 0.055, 0.22), Color(0.16, 0.28, 0.5), Vector3(0, -0.02, 0.12)))  # sleeve
-	fist.add_child(Props.box(Vector3(0.06, 0.05, 0.08), Color(0.85, 0.66, 0.52), Vector3(0, -0.01, -0.02)))   # hand
 	bat = Node3D.new()
-	bat.rotation = Vector3(deg_to_rad(55), deg_to_rad(-10), 0)
-	bat.position = Vector3(0, 0, -0.08)
 	viewmodel.add_child(bat)
-	if Props.has_model("bat"):
-		var real_bat := Props.visual("bat", Vector3(0.08, 0.84, 0.08), Color.WHITE, true)
-		real_bat.position.y = -0.1
-		bat.add_child(real_bat)
+	if Props.has_model("fp_fist"):
+		var arm := Props.visual("fp_fist", Vector3.ONE, Color.WHITE)
+		arm.position = -VIEWMODEL_POS
+		fist.add_child(arm)
 	else:
-		var shaft := MeshInstance3D.new()
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = 0.032
-		cyl.bottom_radius = 0.018
-		cyl.height = 0.8
-		shaft.mesh = cyl
-		shaft.material_override = Props.mat(Color(0.72, 0.73, 0.76))
-		shaft.position.y = 0.32
-		bat.add_child(shaft)
+		fist.add_child(Props.box(Vector3(0.055, 0.055, 0.22), Color(0.16, 0.28, 0.5), Vector3(0, -0.02, 0.12)))  # sleeve
+		fist.add_child(Props.box(Vector3(0.06, 0.05, 0.08), Color(0.85, 0.66, 0.52), Vector3(0, -0.01, -0.02)))   # hand
+	if Props.has_model("fp_bat"):
+		var grip := Props.visual("fp_bat", Vector3.ONE, Color.WHITE)
+		grip.position = -VIEWMODEL_POS
+		bat.add_child(grip)
+	else:  # no hands: just the bat, tipped over the shoulder
+		bat.rotation = Vector3(deg_to_rad(55), deg_to_rad(-10), 0)
+		bat.position = Vector3(0, 0, -0.08)
+		if Props.has_model("bat"):
+			var real_bat := Props.visual("bat", Vector3(0.08, 0.84, 0.08), Color.WHITE, true)
+			real_bat.position.y = -0.1
+			bat.add_child(real_bat)
+		else:
+			var shaft := MeshInstance3D.new()
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = 0.032
+			cyl.bottom_radius = 0.018
+			cyl.height = 0.8
+			shaft.mesh = cyl
+			shaft.material_override = Props.mat(Color(0.72, 0.73, 0.76))
+			shaft.position.y = 0.32
+			bat.add_child(shaft)
 
 	flashlight = SpotLight3D.new()
 	flashlight.spot_range = 14.0
@@ -95,6 +108,7 @@ func _ready() -> void:
 	flashlight.visible = false
 	camera.add_child(flashlight)
 
+	_no_shadows(viewmodel)
 	Game.shake.connect(_on_shake)
 
 
@@ -163,7 +177,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		bob_t = lerp(bob_t, round(bob_t / PI) * PI, 10.0 * delta)
 	head.position.y = EYE_HEIGHT + sin(bob_t) * 0.025
-	viewmodel.position.x = 0.26 + cos(bob_t * 0.5) * 0.008
+	viewmodel.position.x = VIEWMODEL_POS.x + cos(bob_t * 0.5) * 0.008
 	move_and_slide()
 
 
@@ -319,3 +333,12 @@ func _wake() -> void:
 	if is_instance_valid(_bed):
 		# Swing your legs out on the room side of the bed.
 		global_position = _bed.to_global(Vector3(_bed.size.x * 0.5 + 0.4, 0.05, 0.5))
+
+
+## Viewmodel meshes are drawn at arm's length from the camera; their shadows
+## would land on the walls in odd places.
+func _no_shadows(node: Node) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for c in node.get_children():
+		_no_shadows(c)
