@@ -5,19 +5,22 @@ extends CanvasLayer
 
 const Scenario := preload("res://scripts/data/scenario_zombie.gd")
 const Perks := preload("res://scripts/data/perks.gd")
+const UI := preload("res://scripts/ui/ui_style.gd")
 
-const C_TEXT := Color(0.92, 0.92, 0.9)
-const C_DIM := Color(0.6, 0.62, 0.65)
-const C_GOOD := Color(0.55, 0.9, 0.6)
-const C_WARN := Color(1.0, 0.8, 0.35)
-const C_DANGER := Color(1.0, 0.4, 0.35)
-const C_ACCENT := Color(0.95, 0.35, 0.45)
+# Roles -> the "Office hours" palette (scripts/ui/ui_style.gd).
+const C_TEXT := UI.PAPER
+const C_DIM := UI.DIM
+const C_GOOD := UI.LINE_GREEN
+const C_WARN := UI.SIGN_YELLOW
+const C_DANGER := UI.ALERT_TEXT
+const C_ACCENT := UI.HANKO_TEXT
 
 var player: Node
 var barricades := {}
 
 var root: Control
-var clock_label: Label
+var clock_label: Label      # 7-segment HH:MM
+var day_label: Label
 var phase_label: Label
 var health_bar: ProgressBar
 var hunger_bar: ProgressBar
@@ -38,6 +41,9 @@ var overlay_kind := ""  # intro | reading | journal | pause | end
 var _reading_queue: Array = []
 var _erase_armed := false
 var _erase_button: Button
+var _hud_boxes: Array = []  # HUD panel styles whose top rule turns red at night
+var _overlay_box_style: StyleBoxFlat
+var _shown_phase := -1
 
 
 func _ready() -> void:
@@ -46,6 +52,7 @@ func _ready() -> void:
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UI.build_theme()
 	add_child(root)
 	_build_status()
 	_build_barricade_panel()
@@ -66,20 +73,12 @@ func _ready() -> void:
 
 # --- Widgets ----------------------------------------------------------------------
 
-func _style(bg: Color, border: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.set_corner_radius_all(6)
-	s.set_content_margin_all(12)
-	if border.a > 0.0:
-		s.set_border_width_all(1)
-		s.border_color = border
-	return s
-
-
+## A HUD panel (office grey, coloured top rule that follows the day/night phase).
 func _panel() -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", _style(Color(0.06, 0.07, 0.09, 0.82), Color(1, 1, 1, 0.08)))
+	var box := UI.panel_box()
+	_hud_boxes.append(box)
+	p.add_theme_stylebox_override("panel", box)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return p
 
@@ -89,24 +88,15 @@ func _label(text: String, font_size: int = 16, color: Color = C_TEXT) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	l.add_theme_constant_override("outline_size", 3)
 	return l
 
 
 func _bar(color: Color, width: float = 200.0) -> ProgressBar:
 	var b := ProgressBar.new()
 	b.show_percentage = false
-	b.custom_minimum_size = Vector2(width, 12)
+	b.custom_minimum_size = Vector2(width, 8)
 	b.max_value = 100
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.08)
-	bg.set_corner_radius_all(3)
-	var fg := StyleBoxFlat.new()
-	fg.bg_color = color
-	fg.set_corner_radius_all(3)
-	b.add_theme_stylebox_override("background", bg)
-	b.add_theme_stylebox_override("fill", fg)
+	b.add_theme_stylebox_override("fill", UI.bar_box(color))
 	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return b
 
@@ -115,7 +105,7 @@ func _stat_row(parent: Node, title: String, bar: ProgressBar) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var l := _label(title, 14, C_DIM)
-	l.custom_minimum_size = Vector2(62, 0)
+	l.custom_minimum_size = Vector2(118, 0)
 	row.add_child(l)
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(bar)
@@ -126,11 +116,6 @@ func _stat_row(parent: Node, title: String, bar: ProgressBar) -> HBoxContainer:
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.add_theme_font_size_override("font_size", 17)
-	b.add_theme_stylebox_override("normal", _style(Color(0.16, 0.17, 0.2), Color(1, 1, 1, 0.12)))
-	b.add_theme_stylebox_override("hover", _style(Color(0.26, 0.2, 0.24), C_ACCENT))
-	b.add_theme_stylebox_override("pressed", _style(Color(0.35, 0.18, 0.22), C_ACCENT))
-	b.add_theme_stylebox_override("focus", _style(Color(0.26, 0.2, 0.24), C_ACCENT))
 	b.pressed.connect(cb)
 	return b
 
@@ -145,21 +130,32 @@ func _build_status() -> void:
 	v.add_theme_constant_override("separation", 6)
 	p.add_child(v)
 	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 14)
-	clock_label = _label("Day 1  08:00", 24)
-	phase_label = _label("DAY", 14, C_WARN)
+	top.add_theme_constant_override("separation", 12)
+	day_label = _label("1日目", 16, C_DIM)
+	day_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# 7-segment clock over its own faint unlit "88:88", like a bedside LCD.
+	var unlit := _label("88:88", 26, Color(UI.PAPER, 0.08))
+	unlit.add_theme_font_override("font", UI.clock_font())
+	unlit.add_theme_constant_override("outline_size", 0)
+	clock_label = _label("08:00", 26)
+	clock_label.add_theme_font_override("font", UI.clock_font())
+	clock_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	unlit.add_child(clock_label)
+	phase_label = _label("日中 DAY", 14, C_WARN)
 	phase_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top.add_child(clock_label)
+	top.add_child(day_label)
+	top.add_child(unlit)
 	top.add_child(phase_label)
 	v.add_child(top)
-	health_bar = _bar(Color(0.85, 0.25, 0.3))
-	hunger_bar = _bar(Color(0.9, 0.65, 0.25))
-	thirst_bar = _bar(Color(0.3, 0.6, 0.95))
-	noise_bar = _bar(Color(0.8, 0.8, 0.85))
-	_stat_row(v, "Health", health_bar)
-	_stat_row(v, "Hunger", hunger_bar)
-	_stat_row(v, "Thirst", thirst_bar)
-	noise_row = _stat_row(v, "Noise", noise_bar)
+	health_bar = _bar(UI.BAR_HEALTH)
+	hunger_bar = _bar(UI.BAR_HUNGER)
+	thirst_bar = _bar(UI.BAR_THIRST)
+	noise_bar = _bar(UI.BAR_NOISE)
+	_stat_row(v, "体調  Health", health_bar)
+	_stat_row(v, "空腹  Hunger", hunger_bar)
+	_stat_row(v, "水分  Thirst", thirst_bar)
+	noise_row = _stat_row(v, "物音  Noise", noise_bar)
 	inv_label = _label("", 15)
 	v.add_child(inv_label)
 	info_label = _label("", 14, C_WARN)
@@ -175,11 +171,11 @@ func _build_barricade_panel() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
 	p.add_child(v)
-	v.add_child(_label("ENTRANCES", 13, C_DIM))
+	v.add_child(_label("出入口  ENTRANCES", 13, C_DIM))
 	for id in barricades:
 		var b = barricades[id]
 		var name_l := _label(b.display_name, 14)
-		var bar := _bar(Color(0.7, 0.72, 0.75), 170)
+		var bar := _bar(UI.BAR_NOISE, 170)
 		v.add_child(name_l)
 		v.add_child(bar)
 		barricade_rows[id] = {"label": name_l, "bar": bar}
@@ -200,7 +196,7 @@ func _build_prompt() -> void:
 	prompt_box.set_anchors_preset(Control.PRESET_CENTER)
 	prompt_box.position = Vector2(-230, 40)
 	prompt_box.custom_minimum_size = Vector2(460, 0)
-	prompt_box.add_theme_stylebox_override("panel", _style(Color(0.04, 0.05, 0.06, 0.55)))
+	prompt_box.add_theme_stylebox_override("panel", UI.box(Color(0.06, 0.07, 0.08, 0.62)))
 	root.add_child(prompt_box)
 	var v := VBoxContainer.new()
 	prompt_box.add_child(v)
@@ -212,7 +208,7 @@ func _build_prompt() -> void:
 	prompt_label.add_theme_font_size_override("bold_font_size", 17)
 	prompt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(prompt_label)
-	hold_bar = _bar(C_ACCENT, 436)
+	hold_bar = _bar(UI.SIGN_YELLOW, 436)
 	v.add_child(hold_bar)
 	prompt_box.visible = false
 
@@ -243,16 +239,22 @@ func _capture_mouse(captured: bool) -> void:
 # --- Per-frame refresh ------------------------------------------------------------------
 
 func _process(_delta: float) -> void:
-	clock_label.text = "Day %d   %s" % [Game.day, Game.clock_string()]
+	day_label.text = "%d日目" % Game.day
+	clock_label.text = Game.clock_string()
 	match Game.phase:
 		Game.Phase.NIGHT:
-			phase_label.text = "NIGHT %d / %d" % [Game.day, Scenario.NIGHTS_TO_SURVIVE]
+			phase_label.text = "夜  NIGHT %d / %d" % [Game.day, Scenario.NIGHTS_TO_SURVIVE]
 			phase_label.add_theme_color_override("font_color", C_DANGER)
 		Game.Phase.DAY:
-			phase_label.text = "DAY"
+			phase_label.text = "日中  DAY"
 			phase_label.add_theme_color_override("font_color", C_WARN)
 		_:
 			phase_label.text = ""
+	if Game.phase != _shown_phase:
+		_shown_phase = Game.phase
+		var rule: Color = UI.ALERT_RED if Game.phase == Game.Phase.NIGHT else UI.LINE_GREEN
+		for box in _hud_boxes:
+			box.border_color = rule
 	health_bar.max_value = Game.max_health
 	health_bar.value = Game.health
 	hunger_bar.value = Game.hunger
@@ -299,13 +301,13 @@ func _refresh_prompt() -> void:
 		prompt_box.visible = false
 		return
 	prompt_box.visible = true
-	var text := "[b]%s[/b]  [color=#9aa]%s[/color]" % [f.display_name, f.get_status()]
+	var text := "[b]%s[/b]  [color=%s]%s[/color]" % [f.display_name, UI.hex(C_DIM), f.get_status()]
 	var p1: String = f.get_prompt(false)
 	var p2: String = f.get_prompt(true)
 	if p1 != "":
-		text += "\n[color=#f6a]Hold E[/color]  " + p1
+		text += "\n[color=%s][b]E[/b] 長押し[/color]  %s" % [UI.hex(C_WARN), p1]
 	if p2 != "":
-		text += "\n[color=#f6a]Hold R[/color]  " + p2
+		text += "\n[color=%s][b]R[/b] 長押し[/color]  %s" % [UI.hex(C_WARN), p2]
 	prompt_label.text = text
 	hold_bar.value = player.hold_fraction() * 100.0
 	hold_bar.visible = hold_bar.value > 0.0
@@ -361,7 +363,8 @@ func _build_overlay() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", _style(Color(0.08, 0.09, 0.11, 0.98), Color(1, 1, 1, 0.1)))
+	_overlay_box_style = UI.box(Color(0.11, 0.12, 0.13, 0.98), UI.SIGN_YELLOW, 4, 20)
+	p.add_theme_stylebox_override("panel", _overlay_box_style)
 	p.custom_minimum_size = Vector2(760, 0)
 	center.add_child(p)
 	var scroll := ScrollContainer.new()
@@ -378,6 +381,7 @@ func _build_overlay() -> void:
 
 func _open(kind: String) -> void:
 	overlay_kind = kind
+	_overlay_box_style.border_color = UI.HANKO if kind == "end" else UI.SIGN_YELLOW
 	for c in overlay_box.get_children():
 		overlay_box.remove_child(c)
 		c.queue_free()
@@ -453,6 +457,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _show_intro() -> void:
 	_open("intro")
 	overlay_box.add_child(_heading("KEEP LIVING", 44, C_ACCENT))
+	overlay_box.add_child(_label("生きていく", 18, C_DIM))
 	overlay_box.add_child(_label("Scenario %s" % Scenario.TITLE.to_upper(), 14, C_DIM))
 	var body := ""
 	if Meta.runs == 0:
@@ -512,9 +517,9 @@ func _show_reading(clue_id: String, is_new: bool) -> void:
 
 func _show_journal() -> void:
 	_open("journal")
-	overlay_box.add_child(_heading("Journal", 30))
+	overlay_box.add_child(_heading("手帳  Journal", 30))
 	overlay_box.add_child(_label("What you've pieced together (this persists through death)", 13, C_DIM))
-	overlay_box.add_child(_heading("Clues", 20, C_ACCENT))
+	overlay_box.add_child(_heading("手がかり  Clues", 20, C_ACCENT))
 	for clue_id in Scenario.CLUES:
 		var clue: Dictionary = Scenario.CLUES[clue_id]
 		if Meta.knows_clue(Scenario.ID, clue_id):
@@ -523,7 +528,7 @@ func _show_journal() -> void:
 			overlay_box.add_child(_text(clue["text"], 14, C_DIM))
 		else:
 			overlay_box.add_child(_label("???", 16, C_DIM))
-	overlay_box.add_child(_heading("Insights", 20, C_ACCENT))
+	overlay_box.add_child(_heading("気づき  Insights", 20, C_ACCENT))
 	var any := false
 	for insight_id in Scenario.INSIGHTS:
 		if Game.has_insight(insight_id):
@@ -533,7 +538,7 @@ func _show_journal() -> void:
 	if not any:
 		overlay_box.add_child(_text("None yet. Clues teach you things that stay useful.", 15, C_DIM))
 
-	overlay_box.add_child(_heading("What is happening?", 20, C_ACCENT))
+	overlay_box.add_child(_heading("何が起きている?  What is happening?", 20, C_ACCENT))
 	if Meta.is_theory_solved(Scenario.ID):
 		overlay_box.add_child(_text("You know what this is: an infection. The bitten turn. (+15% damage)", 15, C_GOOD))
 	elif Game.can_submit_theory():
@@ -548,7 +553,7 @@ func _show_journal() -> void:
 	else:
 		overlay_box.add_child(_text("You need at least %d clues before you can name it." % Scenario.THEORY_MIN_CLUES, 15, C_DIM))
 
-	overlay_box.add_child(_heading("Echoes", 20, C_ACCENT))
+	overlay_box.add_child(_heading("残響  Echoes", 20, C_ACCENT))
 	if Meta.perks.is_empty():
 		overlay_box.add_child(_text("None yet. Each death leaves you a small advantage.", 15, C_DIM))
 	for p in Meta.perks:
@@ -564,7 +569,7 @@ func _show_journal() -> void:
 func _show_pause() -> void:
 	_erase_armed = false
 	_open("pause")
-	overlay_box.add_child(_heading("Paused", 30))
+	overlay_box.add_child(_heading("一時停止  Paused", 30))
 	overlay_box.add_child(_button("Resume", _close))
 	overlay_box.add_child(_button("Journal", _show_journal))
 	overlay_box.add_child(_button("Restart this life", _restart))
