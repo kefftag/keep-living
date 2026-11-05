@@ -28,6 +28,10 @@ var lunge_cd := 0.0
 var twitch_t := 0.0
 var twitch := Vector3.ZERO
 var shrieked := false
+var anim: AnimationPlayer       # set when the model is rigged (walk / idle / attack clips)
+var head_from_body := Transform3D()  # body space -> head bone space, for the eyes
+var biting := false
+const WALK_CLIP_SPEED := 0.6  # m/s the walk clip plays naturally at (a bit above its ~0.4 to limit scrambling)
 
 
 func setup(target_point, player_ref: Node3D, night_number: int, slot_index: int) -> void:
@@ -73,10 +77,24 @@ func _ready() -> void:
 			pivot.add_child(arm_mesh)
 		pivot.add_child(Props.box(Vector3(0.3, 0.08, 0.1), Color(0.6, 0.1, 0.1), Vector3(0, 1.32, 0.22)))  # eyes
 
+	anim = _find_anim_player(body) if body != null else null
+	if anim:
+		for clip in ["walk", "idle", "attack"]:
+			if anim.has_animation(clip):
+				anim.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+		_play("idle", 1.0)
+		anim.seek(randf_range(0.0, 3.0), true)  # don't move in lockstep
+
 	# Eyes: pale, faintly glowing, so they catch your phone light in the dark.
+	var head := _head_attachment(body) if anim else null
 	for side in [-1, 1]:
-		var eye := Props.box(Vector3(0.035, 0.02, 0.02), Color(0.95, 0.92, 0.75), Vector3(0.045 * side, 1.47, 0.16), 2.5)
-		(body if body != null else pivot).add_child(eye)
+		if head:
+			var eye := Props.box(Vector3(0.018, 0.008, 0.008), Color(0.95, 0.92, 0.75), Vector3.ZERO, 1.6)
+			eye.transform = head_from_body * Transform3D(Basis(), Vector3(0.032 * side, 1.59, 0.095))
+			head.add_child(eye)
+		else:
+			var eye := Props.box(Vector3(0.035, 0.02, 0.02), Color(0.95, 0.92, 0.75), Vector3(0.045 * side, 1.47, 0.16), 2.5)
+			(body if body != null else pivot).add_child(eye)
 	pivot.rotation.x = 0.0
 	if body == null:
 		body = pivot
@@ -110,6 +128,7 @@ func _physics_process(delta: float) -> void:
 		if body_mat:
 			body_mat.emission_enabled = flash_t > 0.0
 	if not Game.is_alive_phase():
+		biting = false
 		velocity.x = 0
 		velocity.z = 0
 		move_and_slide()
@@ -140,7 +159,8 @@ func _physics_process(delta: float) -> void:
 				return
 			var day_slow := 0.6 if Game.phase == Game.Phase.DAY else 1.0
 			var to := _flat(player.global_position - global_position)
-			if to.length() < 1.05:
+			biting = to.length() < 1.05
+			if biting:
 				velocity.x = 0
 				velocity.z = 0
 				_face(player.global_position, delta)
@@ -175,8 +195,71 @@ func _animate(delta: float) -> void:
 		twitch = Vector3(randf_range(-0.35, 0.25), randf_range(-0.5, 0.5), randf_range(-0.3, 0.3))
 	twitch = twitch.lerp(Vector3.ZERO, 1.0 - exp(-9.0 * delta))
 	var lean := 0.32 if lunge_t > 0.0 else 0.18  # hunched forward, more when lunging
+	if anim:
+		lean -= 0.14  # the clips are already hunched
 	if body != pivot and is_instance_valid(body):
 		body.rotation = Vector3(lean + twitch.x + sin(anim_t * 2.1) * 0.04, twitch.y, twitch.z + sin(anim_t * 1.3) * 0.06)
+	if anim:
+		var hspeed := Vector2(velocity.x, velocity.z).length()
+		if state == State.BASH or biting:
+			_play("attack", 1.0 + (0.4 if biting else 0.0))
+		elif hspeed > 0.15:
+			# The clip covers ~0.4 m/s; past ~2.5x it reads as a frantic scramble, so let feet slide.
+			_play("walk", clamp(hspeed / WALK_CLIP_SPEED, 0.8, 2.5))
+		else:
+			_play("idle", 1.0)
+
+
+func _play(clip: String, rate: float) -> void:
+	if anim.current_animation != clip and anim.has_animation(clip):
+		anim.play(clip, 0.25)
+	anim.speed_scale = rate
+
+
+static func _find_anim_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node
+	for c in node.get_children():
+		var found := _find_anim_player(c)
+		if found:
+			return found
+	return null
+
+
+static func _find_skeleton(node: Node) -> Skeleton3D:
+	if node is Skeleton3D:
+		return node
+	for c in node.get_children():
+		var found := _find_skeleton(c)
+		if found:
+			return found
+	return null
+
+
+## A BoneAttachment3D on the head bone; sets head_from_body so things placed in
+## body space (metres, +Z front) land on the face at the rest pose.
+func _head_attachment(root: Node3D) -> BoneAttachment3D:
+	var skel := _find_skeleton(root)
+	if skel == null:
+		return null
+	var idx := -1
+	for i in skel.get_bone_count():
+		var bn := skel.get_bone_name(i)
+		if bn.ends_with("Head") and not bn.contains("Top"):
+			idx = i
+			break
+	if idx < 0:
+		return null
+	var skel_xf := Transform3D()  # skeleton -> body
+	var n: Node = skel
+	while n != root and n is Node3D:
+		skel_xf = (n as Node3D).transform * skel_xf
+		n = n.get_parent()
+	head_from_body = (skel_xf * skel.get_bone_global_rest(idx)).affine_inverse()
+	var att := BoneAttachment3D.new()
+	att.bone_idx = idx
+	skel.add_child(att)
+	return att
 
 
 func _flat(v: Vector3) -> Vector3:
@@ -223,6 +306,8 @@ func die() -> void:
 	remove_from_group("zombie")
 	collision_layer = 0
 	collision_mask = 1
+	if anim:
+		anim.pause()
 	var tween := create_tween()
 	tween.tween_property(pivot, "rotation:x", -PI * 0.5, 0.4)
 	tween.tween_interval(2.0)
