@@ -3,6 +3,8 @@ extends CharacterBody3D
 ## balcony) to an entrance, beats on it until it breaks, then hunts the player.
 
 const Props := preload("res://scripts/world/props.gd")
+## assets/models/<name>.glb, one picked per zombie. Rigged ones carry walk / idle / attack clips.
+const MODEL_VARIANTS := ["zombie", "zombie_02"]
 
 enum State { APPROACH, BASH, HUNT, DEAD }
 
@@ -58,8 +60,9 @@ func _ready() -> void:
 
 	pivot = Node3D.new()
 	add_child(pivot)
-	if Props.has_model("zombie"):
-		body = Props.visual("zombie", Vector3(0.5, 1.7, 0.3), Color.WHITE)
+	var variants: Array = MODEL_VARIANTS.filter(func(n): return Props.has_model(n))
+	if not variants.is_empty():
+		body = Props.visual(variants.pick_random(), Vector3(0.5, 1.7, 0.3), Color.WHITE)
 		pivot.add_child(body)
 	else:
 		body_mat = StandardMaterial3D.new()
