@@ -49,6 +49,7 @@ const C_BATH := Color(0.82, 0.84, 0.86)
 const C_SKIRTING := Color(0.95, 0.95, 0.94)
 const C_WOOD := Color(0.62, 0.45, 0.3)
 const C_DOOR := Color(1.0, 0.95, 0.88)
+const C_PARTITION := Color(0.86, 0.86, 0.82)  # balcony 隔て板
 
 var nav_region: NavigationRegion3D
 var barricades := {}  # id -> barricade node
@@ -56,6 +57,7 @@ var doors := {}       # id -> door node
 var room_lights: Array = []
 var window_lights: Array = []
 var _rebake_queued := false
+var _probes: Array = []
 
 
 func _ready() -> void:
@@ -82,8 +84,10 @@ func _ready() -> void:
 	_build_outside()
 	_build_lights()
 	_build_skyline()
+	_build_reflection_probes()
 	Game.nav_dirty.connect(_queue_rebake)
 	Game.world_changed.connect(_on_world_changed)
+	Game.phase_changed.connect(_refresh_city_windows)
 	bake()
 
 
@@ -131,9 +135,9 @@ func _build_floors() -> void:
 	_floor(1.82, 2.73, 5.46, 7.28, 0, "floor_cushion")  # toilet
 	# One step down: genkan, alcove, outdoor corridor.
 	_floor(2.73, 4.55, 6.37, 7.28, GENKAN_Y, "floor_genkan")
-	_floor(4.55, 6.37, 5.46, 7.28, GENKAN_Y, "concrete_floor", Color(0.8, 0.8, 0.8))
-	_floor(-0.5, 10.5, 7.28, 8.78, GENKAN_Y, "concrete_floor", Color(0.8, 0.8, 0.8))
-	_floor(-0.1, 6.47, -1.5, 0, -0.02, "concrete_floor")  # balcony
+	_floor(4.55, 6.37, 5.46, 7.28, GENKAN_Y, "concrete_floor")
+	_floor(-0.5, 10.5, 7.28, 8.78, GENKAN_Y, "concrete_floor")
+	_floor(-0.1, 6.47, -1.5, 0, -0.02, "balcony_floor")  # balcony
 	# The 上がり框 step is drawn vertical, but collides as a short ramp so
 	# feet and the navmesh can climb it.
 	var ramp_len := 0.3
@@ -145,7 +149,9 @@ func _build_floors() -> void:
 	ramp.rotation.x = angle
 	ramp.position = Vector3(3.64, GENKAN_Y * 0.5 - 0.02 * cos(angle), 6.37 + ramp_len * 0.5)
 	nav_region.add_child(ramp)
-	add_child(Props.box(Vector3(1.82, 0.04, 0.06), C_WOOD, Vector3(3.64, -0.02, 6.4)))  # wooden step edge
+	# 上がり框: a solid-wood nosing on the step, its riser faced in the same wood.
+	add_child(Props.sbox(Vector3(1.82, 0.025, 0.1), "wood", Vector3(3.64, -0.0105, 6.335)))
+	add_child(Props.sbox(Vector3(1.82, 0.152, 0.022), "wood", Vector3(3.64, -0.074, 6.381)))
 	# Ceiling over everything (the floor above / the upper balcony and corridor).
 	var ceiling := StaticBody3D.new()
 	ceiling.collision_layer = 1
@@ -153,6 +159,12 @@ func _build_floors() -> void:
 	ceiling.add_child(Props.box_shape(Vector3(12, 0.2, 10.4)))
 	ceiling.add_child(Props.sbox(Vector3(12, 0.2, 10.4), "wallpaper", Vector3.ZERO, Color(1.0, 1.0, 1.0)))
 	add_child(ceiling)  # not under the nav region
+	# Outdoors the "ceiling" is the bare concrete slab of the balcony / corridor above.
+	add_child(Props.sbox(Vector3(6.6, 0.01, 1.52), "concrete_wall", Vector3(3.18, CEIL - 0.004, -0.75), Color(0.95, 0.95, 0.93)))
+	add_child(Props.sbox(Vector3(11.1, 0.01, 1.52), "concrete_wall", Vector3(5.0, CEIL - 0.004, 8.03), Color(0.95, 0.95, 0.93)))
+	add_child(Props.sbox(Vector3(1.82, 0.01, 1.82), "concrete_wall", Vector3(5.46, CEIL - 0.004, 6.37), Color(0.95, 0.95, 0.93)))
+	# Unit bath: its own satin panel ceiling.
+	add_child(Props.sbox(Vector3(1.75, 0.01, 1.7), "bath_panel", Vector3(0.92, CEIL - 0.006, 6.36)))
 
 
 ## Axis-aligned wall from a to b with door/window openings
@@ -161,6 +173,8 @@ func _wall(a: Vector2, b: Vector2, openings: Array = [], thick: float = INT_T, c
 		bottom: float = 0.0, height: float = CEIL, skirting: bool = true, outer: float = 0.0) -> void:
 	# outer: which side is outdoors (+1/-1 along the wall's +Z/+X normal) for a concrete skin.
 	var surf := "wallpaper" if color == C_WALLPAPER else ("concrete_wall" if color == C_CONCRETE else "")
+	if color == C_PARTITION:
+		surf = "board_cream"
 	var length := a.distance_to(b)
 	var dir := (b - a).normalized()
 	var along_x: bool = abs(dir.x) > 0.5
@@ -191,8 +205,90 @@ func _wall(a: Vector2, b: Vector2, openings: Array = [], thick: float = INT_T, c
 			var skin: Vector3 = Vector3(sz.x, sz.y, 0.012) if along_x else Vector3(0.012, sz.y, sz.z)
 			add_child(Props.sbox(skin, "concrete_wall", center + n * (thick * 0.5 + 0.006), Color(0.92, 0.91, 0.88)))
 		if skirting and not is_lintel:
-			var sk: Vector3 = Vector3(seg, 0.06, thick + 0.02) if along_x else Vector3(thick + 0.02, 0.06, seg)
-			add_child(Props.box(sk, C_SKIRTING, Vector3(mid.x, bottom + 0.03, mid.y)))
+			# ソフト巾木: 60 mm vinyl skirting, 8 mm proud. Exterior walls only get it inside.
+			var faces: Array = [-1.0, 1.0] if outer == 0.0 else [-outer]
+			for f in faces:
+				var sk: Vector3 = Vector3(seg + (ext * 2.0 if outer != 0.0 else 0.0), 0.06, 0.008) if along_x \
+					else Vector3(0.008, 0.06, seg + (ext * 2.0 if outer != 0.0 else 0.0))
+				var off: Vector3 = (Vector3(0, 0, f) if along_x else Vector3(f, 0, 0)) * (thick * 0.5 + 0.004)
+				add_child(Props.fbox(sk, "vinyl_white", Vector3(mid.x, bottom + 0.03, mid.y) + off))
+	if skirting and outer == 0.0:
+		for o in sorted:
+			_casing(a, dir, along_x, o, thick, bottom)
+
+
+## 額縁/ケーシング: the door trim around an interior opening, on both faces,
+## plus the jamb lining across the wall's thickness.
+func _casing(a: Vector2, dir: Vector2, along_x: bool, o: Array, thick: float, bottom: float) -> void:
+	var trim := Props.surface("wood_light", C_DOOR)
+	var w := 0.05      # trim width
+	var proud := 0.012
+	var top: float = o[2]
+	var h: float = top - bottom
+	var s0: float = o[0]
+	var s1: float = o[1]
+	var pieces: Array = [  # [along-wall centre, along-wall size, y centre, height]
+		[s0 - w * 0.5, w, bottom + (h + w) * 0.5, h + w],
+		[s1 + w * 0.5, w, bottom + (h + w) * 0.5, h + w],
+		[(s0 + s1) * 0.5, s1 - s0, top + w * 0.5, w],
+	]
+	for f in [-1.0, 1.0]:
+		for p in pieces:
+			var c2: Vector2 = a + dir * float(p[0])
+			var off: float = f * (thick * 0.5 + proud * 0.5)
+			var sz: Vector3 = Vector3(p[1], p[3], proud) if along_x else Vector3(proud, p[3], p[1])
+			var pos := Vector3(c2.x, p[2], c2.y) + (Vector3(0, 0, off) if along_x else Vector3(off, 0, 0))
+			var mi := Props.box(sz, Color.WHITE, pos)
+			mi.material_override = trim
+			add_child(mi)
+	if s1 - s0 > 1.2:
+		return  # the bedroom's sliding doors run into the wall pockets: no lining
+	var lin := 0.006
+	for p in [[s0 + lin * 0.5, lin, bottom + h * 0.5, h], [s1 - lin * 0.5, lin, bottom + h * 0.5, h], [(s0 + s1) * 0.5, s1 - s0, top - lin * 0.5, lin]]:
+		var c2: Vector2 = a + dir * float(p[0])
+		var sz: Vector3 = Vector3(p[1], p[3], thick + 0.002) if along_x else Vector3(thick + 0.002, p[3], p[1])
+		if p[3] == lin:
+			sz = Vector3(p[1], lin, thick + 0.002) if along_x else Vector3(thick + 0.002, lin, p[1])
+		var mi := Props.box(sz, Color.WHITE, Vector3(c2.x, p[2], c2.y))
+		mi.material_override = trim
+		add_child(mi)
+
+
+## Aluminium handrail capping a parapet: a flat rail on short posts.
+func _handrail(center: Vector3, length: float, along_x: bool) -> void:
+	var rail: Vector3 = Vector3(length, 0.035, 0.07) if along_x else Vector3(0.07, 0.035, length)
+	add_child(Props.fbox(rail, "aluminium", center + Vector3(0, 0.1, 0)))
+	var n := int(length / 1.2) + 1
+	for i in n + 1:
+		var t := -length * 0.5 + 0.05 + (length - 0.1) * float(i) / float(n)
+		var p: Vector3 = center + (Vector3(t, 0.045, 0) if along_x else Vector3(0, 0.045, t))
+		add_child(Props.fbox(Vector3(0.03, 0.09, 0.03), "aluminium", p))
+
+
+## A thin non-colliding lining on a wall face, from a to b (on the face plane),
+## with openings [start, end, top, sill] measured from a.
+func _lining(a: Vector2, b: Vector2, openings: Array, surf: String, y0: float, y1: float) -> void:
+	var length := a.distance_to(b)
+	var dir := (b - a).normalized()
+	var along_x: bool = abs(dir.x) > 0.5
+	var t := 0.004
+	var rects: Array = []  # [s0, s1, ya, yb]
+	var cursor := 0.0
+	for o in openings:
+		rects.append([cursor, o[0], y0, y1])
+		rects.append([o[0], o[1], o[2], y1])
+		if o.size() > 3:
+			rects.append([o[0], o[1], y0, o[3]])
+		cursor = o[1]
+	rects.append([cursor, length, y0, y1])
+	for r in rects:
+		var seg: float = r[1] - r[0]
+		var h: float = r[3] - r[2]
+		if seg <= 0.001 or h <= 0.001:
+			continue
+		var mid: Vector2 = a + dir * ((r[0] + r[1]) * 0.5)
+		var sz: Vector3 = Vector3(seg, h, t) if along_x else Vector3(t, h, seg)
+		add_child(Props.sbox(sz, surf, Vector3(mid.x, (r[2] + r[3]) * 0.5, mid.y)))
 
 
 func _build_walls() -> void:
@@ -214,10 +310,16 @@ func _build_walls() -> void:
 	_wall(Vector2(3.64, 5.46), Vector2(4.55, 5.46))                              # kitchen | closet
 	_wall(Vector2(3.64, 6.37), Vector2(4.55, 6.37), [[0.11, 0.81, DOOR_TOP]])    # closet | genkan
 	# Outside: balcony railing + partitions, corridor railing, neighbours.
-	var rail := Color(0.35, 0.36, 0.38)
-	_wall(Vector2(-0.1, -1.5), Vector2(6.47, -1.5), [], 0.08, rail, 0.0, 1.1, false)
-	_wall(Vector2(0, -1.5), Vector2(0, 0), [], 0.04, Color(0.86, 0.86, 0.82), 0.0, 1.9, false)
-	_wall(Vector2(6.37, -1.5), Vector2(6.37, 0), [], 0.04, Color(0.86, 0.86, 0.82), 0.0, 1.9, false)
+	# Balcony: RC parapet (腰壁) with an aluminium handrail; 隔て板 partitions in aluminium frames.
+	_wall(Vector2(-0.1, -1.5), Vector2(6.47, -1.5), [], 0.08, C_CONCRETE, 0.0, 1.1, false)
+	_handrail(Vector3(3.185, 1.1, -1.5), 6.57, true)
+	_wall(Vector2(0, -1.5), Vector2(0, 0), [], 0.04, C_PARTITION, 0.0, 1.9, false)
+	_wall(Vector2(6.37, -1.5), Vector2(6.37, 0), [], 0.04, C_PARTITION, 0.0, 1.9, false)
+	for px in [0.0, 6.37]:
+		for fz in [-1.5 + 0.04, -0.03]:
+			add_child(Props.fbox(Vector3(0.05, 1.92, 0.05), "aluminium", Vector3(px, 0.96, fz)))
+		add_child(Props.fbox(Vector3(0.05, 0.05, 1.5), "aluminium", Vector3(px, 1.905, -0.75)))
+		add_child(Props.fbox(Vector3(0.05, 0.05, 1.5), "aluminium", Vector3(px, 0.08, -0.75)))
 	for x in [0.03, 6.34]:
 		var sign_l := Props.label("非常の際は、ここを破って\n隣戸へ避難できます。", 1.45, Color(0.15, 0.15, 0.15))
 		sign_l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
@@ -228,20 +330,31 @@ func _build_walls() -> void:
 		sign_l.position = Vector3(x + (0.03 if x < 1 else -0.03), 1.45, -0.75)
 		sign_l.rotation.y = FACE_E if x < 1 else FACE_W
 		add_child(sign_l)
-	_wall(Vector2(-0.5, 8.78), Vector2(10.5, 8.78), [], 0.08, rail, GENKAN_Y, 1.1, false)
+	_wall(Vector2(-0.5, 8.78), Vector2(10.5, 8.78), [], 0.08, C_CONCRETE, GENKAN_Y, 1.1, false)
+	_handrail(Vector3(5.0, GENKAN_Y + 1.1, 8.78), 11.0, true)
 	_wall(Vector2(-0.5, 7.28), Vector2(0, 7.28), [], EXT_T, C_CONCRETE, GENKAN_Y, CEIL - GENKAN_Y, false)
 	_wall(Vector2(-0.5, 7.28), Vector2(-0.5, 8.78), [], EXT_T, C_CONCRETE, GENKAN_Y, CEIL - GENKAN_Y, false)
 	_wall(Vector2(6.37, 5.46), Vector2(6.37, 7.28), [], EXT_T, C_CONCRETE, GENKAN_Y, CEIL - GENKAN_Y, false)
 	_wall(Vector2(6.37, 7.28), Vector2(10.5, 7.28), [], EXT_T, C_CONCRETE, GENKAN_Y, CEIL - GENKAN_Y, false)
 	# Neighbour's door (304) and our meter box (MB) in the alcove.
-	add_child(Props.box(Vector3(0.85, 1.95, 0.05), Color(0.36, 0.33, 0.3), Vector3(8.2, GENKAN_Y + 0.98, 7.2)))
-	add_child(Props.box(Vector3(0.04, 1.8, 0.7), Color(0.6, 0.6, 0.58), Vector3(6.29, GENKAN_Y + 1.0, 6.4)))
+	add_child(Props.fbox(Vector3(0.95, 2.05, 0.04), "steel_painted", Vector3(8.2, GENKAN_Y + 1.025, 7.21), Color(0.08, 0.075, 0.07)))
+	add_child(Props.fbox(Vector3(0.85, 1.95, 0.05), "steel_painted", Vector3(8.2, GENKAN_Y + 0.98, 7.2)))
+	add_child(Props.fbox(Vector3(0.14, 0.025, 0.04), "stainless", Vector3(8.55, GENKAN_Y + 1.0, 7.17)))
+	add_child(Props.fbox(Vector3(0.28, 0.05, 0.01), "aluminium_dark", Vector3(8.2, GENKAN_Y + 0.75, 7.17)))
+	add_child(Props.fbox(Vector3(0.04, 1.8, 0.7), "steel_painted_light", Vector3(6.29, GENKAN_Y + 1.0, 6.4)))
+	add_child(Props.fbox(Vector3(0.015, 0.12, 0.03), "plastic_grey", Vector3(6.262, GENKAN_Y + 1.0, 6.12)))
 	var mb := Props.label("MB", GENKAN_Y + 1.6, Color(0.2, 0.2, 0.2))
 	mb.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	mb.no_depth_test = false
 	mb.position = Vector3(6.26, GENKAN_Y + 1.6, 6.4)
 	mb.rotation.y = FACE_W
 	add_child(mb)
+	# Unit bath (1216): satin printed wall panels over the walls inside.
+	var bp := 0.014
+	_lining(Vector2(0.075 + bp, 5.51 + bp), Vector2(0.075 + bp, 7.205 - bp), [], "bath_panel", 0.0, CEIL - 0.01)
+	_lining(Vector2(1.77 - bp, 5.51 + bp), Vector2(1.77 - bp, 7.205 - bp), [], "bath_panel", 0.0, CEIL - 0.01)
+	_lining(Vector2(0.075 + bp, 5.51 + bp), Vector2(1.77 - bp, 5.51 + bp), [[0.8 - 0.089, 1.5 - 0.089, DOOR_TOP]], "bath_panel", 0.0, CEIL - 0.01)
+	_lining(Vector2(0.075 + bp, 7.205 - bp), Vector2(1.77 - bp, 7.205 - bp), [[0.5 - 0.089, 1.2 - 0.089, 1.9, 1.25]], "bath_panel", 0.0, CEIL - 0.01)
 
 
 # --- Doors ---------------------------------------------------------------------
@@ -464,8 +577,20 @@ func _build_furniture() -> void:
 func _build_outside() -> void:
 	_deco("ac_outdoor", Vector3(0.7, 0.55, 0.28), Color(0.9, 0.9, 0.88), Vector3(5.55, 0, -1.3), FACE_N)
 	for x in [0.6, 5.0]:  # laundry-pole hangers on the ceiling
-		add_child(Props.box(Vector3(0.03, 0.35, 0.03), Color(0.7, 0.7, 0.7), Vector3(x, CEIL - 0.18, -0.9)))
-	add_child(Props.box(Vector3(5.0, 0.03, 0.03), Color(0.75, 0.75, 0.78), Vector3(2.8, CEIL - 0.35, -0.9)))
+		add_child(Props.fbox(Vector3(0.03, 0.35, 0.03), "aluminium", Vector3(x, CEIL - 0.18, -0.9)))
+	var pole := MeshInstance3D.new()  # 物干し竿: a stainless pole
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.015
+	cyl.bottom_radius = 0.015
+	cyl.height = 5.0
+	cyl.radial_segments = 12
+	pole.mesh = cyl
+	pole.material_override = Props.finish("stainless")
+	pole.rotation.z = PI * 0.5
+	pole.position = Vector3(2.8, CEIL - 0.35, -0.9)
+	add_child(pole)
+	# Drain (排水口) and the gutter strip along the parapet.
+	add_child(Props.fbox(Vector3(6.4, 0.012, 0.12), "plastic_grey", Vector3(3.18, -0.016, -1.4), Color(0.18, 0.18, 0.19)))
 
 
 # --- Lights & world --------------------------------------------------------------
@@ -511,7 +636,9 @@ func _build_lights() -> void:
 func _build_skyline() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3150  # same Tokyo every run
-	add_child(Props.box(Vector3(220, 0.2, 220), Color(0.2, 0.2, 0.22), Vector3(5, -9.3, 0)))  # street level
+	var street := Props.sbox(Vector3(220, 0.2, 220), "asphalt", Vector3(5, -9.3, 0))  # street level
+	add_child(street)
+	var facades := [_facade_material("facade_tile"), _facade_material("facade_paint")]
 	# Mid-rise residential blocks close by, taller ones further out.
 	for i in 48:
 		var north := i % 2 == 0
@@ -522,22 +649,28 @@ func _build_skyline() -> void:
 		var w := rng.randf_range(8, 18)
 		var d := rng.randf_range(6, 12)
 		var h := rng.randf_range(9, 20) if near else rng.randf_range(15, 60)
-		var tone := rng.randf_range(0.5, 0.72) if near else rng.randf_range(0.3, 0.45)
-		var bld := Props.box(Vector3(w, h, d), Color(tone, tone, tone), Vector3(x, -9.2 + h * 0.5, z))
-		bld.material_override = Props.surface("concrete_wall", Color(tone * 1.2, tone * 1.18, tone * 1.12), true, 2.0)
+		var tone := rng.randf_range(0.85, 1.15)
+		var style := rng.randi() % 2
+		var bld := Props.box(Vector3(w, h, d), Color.WHITE, Vector3(x, -9.2 + h * 0.5, z))
+		bld.material_override = facades[style]
+		var warm := rng.randf_range(-0.04, 0.06)
+		bld.set_instance_shader_parameter("bsize", Vector3(w, h, d))
+		bld.set_instance_shader_parameter("tone", Color(tone + warm, tone, tone - warm))
+		bld.set_instance_shader_parameter("seed", float(i) * 1.37)
+		var lit := rng.randf_range(0.15, 0.45)
+		bld.set_meta("lit", lit)
+		bld.set_instance_shader_parameter("lit", 0.0)
 		add_child(bld)
-		var face_z := z + d * 0.5 + 0.05 if north else z - d * 0.5 - 0.05
-		# Rows of windows / balconies.
-		var floors := int(h / 2.9)
-		for f in floors:
-			if rng.randf() < 0.55:
-				var wy := -9.2 + 1.5 + f * 2.9
-				var strip := Props.box(Vector3(rng.randf_range(1.0, w * 0.5), 1.0, 0.05), Color(1.0, 0.86, 0.6),
-					Vector3(x + rng.randf_range(-w * 0.25, w * 0.25), wy, face_z), 1.2)
-				add_child(strip)
-				window_lights.append(strip)
+		window_lights.append(bld)
+		# Pavement around the block, and rooftop plant (elevator room, water tank).
+		add_child(Props.sbox(Vector3(w + 3.0, 0.15, d + 3.0), "concrete_floor", Vector3(x, -9.2 + 0.075, z), Color(1.05, 1.05, 1.03)))
+		var roof := -9.2 + h
+		var rw := rng.randf_range(2.0, 4.0)
+		add_child(Props.sbox(Vector3(rw, 2.6, rw * 0.8), "concrete_wall", Vector3(x + rng.randf_range(-w, w) * 0.25, roof + 1.3, z), Color(0.85, 0.85, 0.83)))
+		add_child(Props.sbox(Vector3(w, 0.9, 0.15), "concrete_wall", Vector3(x, roof + 0.45, z - d * 0.5 + 0.075), Color(0.85, 0.85, 0.83)))
+		add_child(Props.sbox(Vector3(w, 0.9, 0.15), "concrete_wall", Vector3(x, roof + 0.45, z + d * 0.5 - 0.075), Color(0.85, 0.85, 0.83)))
 		if h > 45:
-			add_child(Props.box(Vector3(0.4, 0.4, 0.4), Color(1, 0.1, 0.1), Vector3(x, -9.2 + h + 0.3, z), 3.0))
+			add_child(Props.box(Vector3(0.4, 0.4, 0.4), Color(1, 0.1, 0.1), Vector3(x, -9.2 + h + 2.9, z), 3.0))
 	for p in [Vector3(-18, -6, -40), Vector3(30, -5, -55), Vector3(10, -6, 45)]:
 		var fire := OmniLight3D.new()
 		fire.position = p
@@ -547,9 +680,75 @@ func _build_skyline() -> void:
 		add_child(fire)
 
 
+## One box-projected reflection probe per room, so metal (the stainless sink and
+## worktop, door levers, aluminium sashes) reflects the room instead of the sky.
+## Captured once; they only affect specular reflections, not ambient light.
+func _build_reflection_probes() -> void:
+	for r in [
+		[0, 2.73, 0, 3.64, 0.0],         # bedroom
+		[2.73, 6.37, 0, 3.64, 0.0],      # living
+		[3.64, 6.37, 3.64, 5.46, 0.0],   # kitchen
+		[2.73, 3.64, 3.64, 6.37, 0.0],   # hall
+		[0, 2.73, 3.64, 5.46, 0.0],      # washroom
+		[0, 1.82, 5.46, 7.28, 0.0],      # bath
+		[1.82, 2.73, 5.46, 7.28, 0.0],   # toilet
+		[2.73, 4.55, 6.37, 7.28, GENKAN_Y],  # genkan
+	]:
+		var p := ReflectionProbe.new()
+		var y0: float = r[4]
+		p.size = Vector3(r[1] - r[0], CEIL - y0, r[3] - r[2])
+		var cy := (y0 + CEIL) * 0.5
+		p.position = Vector3((r[0] + r[1]) * 0.5, cy, (r[2] + r[3]) * 0.5)
+		p.origin_offset = Vector3(0, y0 + 1.4 - cy, 0)  # capture from about eye height
+		p.box_projection = true
+		p.update_mode = ReflectionProbe.UPDATE_ONCE
+		p.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
+		p.blend_distance = 0.3
+		p.max_distance = 12.0
+		add_child(p)
+		_probes.append(p)
+
+
+## Re-render the once-only probes after the lighting changes (day/night,
+## power cut), once now and again when the daylight fade has settled.
+func _recapture_probes() -> void:
+	for i in 2:
+		for p in _probes:
+			p.max_distance = 12.0 + randf() * 0.01  # any change re-queues an UPDATE_ONCE probe
+		if i == 0 and is_inside_tree():
+			await get_tree().create_timer(4.0).timeout
+		if not is_inside_tree():
+			return
+
+
+## Distant apartment blocks: facade texture fitted per building (instance params).
+func _facade_material(key: String) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://assets/shaders/facade.gdshader")
+	m.set_shader_parameter("albedo_tex", load(Props.TEX_DIR + key + "_albedo.jpg"))
+	m.set_shader_parameter("normal_tex", load(Props.TEX_DIR + key + "_normal.jpg"))
+	m.set_shader_parameter("orm_tex", load(Props.TEX_DIR + key + "_orm.jpg"))
+	m.set_shader_parameter("roof_tex", load(Props.TEX_DIR + "concrete_wall_albedo.jpg"))
+	m.set_shader_parameter("macro_tex", Props.macro_texture())
+	return m
+
+
 func _on_world_changed() -> void:
 	for l in room_lights:
 		l.visible = Game.power_on
-	if not Game.power_on:
-		for s in window_lights:
-			s.visible = randf() < 0.12  # a few buildings have generators
+	# Blackout: only a few buildings with generators keep some windows lit.
+	for b in window_lights:
+		b.set_meta("generator", randf() < 0.12)
+	_refresh_city_windows()
+
+
+## Lit windows in the blocks around: only at night (in daylight they read as
+## dark glass), and only where there's power.
+func _refresh_city_windows(_phase: int = 0) -> void:
+	_recapture_probes()
+	var night: bool = Game.phase == Game.Phase.NIGHT
+	for b in window_lights:
+		var lit: float = b.get_meta("lit", 0.3) if night else 0.0
+		if not Game.power_on and not b.get_meta("generator", false):
+			lit = 0.0
+		b.set_instance_shader_parameter("lit", lit)
