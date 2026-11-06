@@ -281,6 +281,32 @@ numbers are constants at the top of `scripts/data/scenario_tide.gd`;
 - **Static:** a signal from the sky. Screens and radios are dangerous to use,
   neighbours act strangely, and clues contradict each other.
 
+## Story
+Every scenario is the same flat, the same Monday (28 October) and the same
+07:58. The story bible is `docs/STORY.md`; the data lives in
+`scripts/data/story.gd`.
+- **Memories (記憶):** 32 fragments in six threads (会社 work, 母 mother, 体 body,
+  303号室 the building, 自分の字 your handwriting, 07:58 morning), found one per
+  container search, from the phone / laptop / post once their clues are read,
+  and at five hidden spots (`scripts/world/keepsake.gd`: wall clock, behind the
+  breaker panel, under the kotatsu, low on the front door, the face-down photo
+  on the TV stand). They persist forever in Meta, shared by every scenario, and
+  have their own journal section. Some appear only from a given life.
+- **Omens** (`scripts/systems/story_director.gd`, every scenario, once a life):
+  a siren that stops outside at the first dawn (life 1+), the wall clock on
+  07:58 after a rest (2+), three slow knocks in daytime (3+), a voice under the
+  radio static (4+), 母 calling by herself (5+), "Clear!" before the death
+  screen (7+). Rescue screens close on a line that hints the rescue isn't real.
+- **Loot lines** name one object per search ("the last cup noodle from a
+  12-pack bought at 02:00").
+- **The final scenario, 月曜日 Monday** (`scenario_monday.gd`,
+  `monday_director.gd`): opens after rescues in two scenarios plus 18 memories
+  including all seven key ones. No threat; the clock never leaves 07:58; a
+  heartbeat at the screen edges and a slower walk; someone knocking. Every
+  memory shows again with a line of understanding. Put on the suit (closet) →
+  "Again.", back to the title. Open the door → the true ending and credits;
+  Monday is marked 完 and the title is lit by morning sun.
+
 ## Front end
 Boot shows the title (生きていく / KEEP LIVING over the live apartment):
 Continue / New life in the last scenario, Scenario select, Settings, Credits,

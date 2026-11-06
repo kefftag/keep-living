@@ -1,6 +1,7 @@
 extends Node
 ## Persistent progress that survives death: known clues (and the insights they
-## grant), Echo perks, solved theories and lifetime stats. Saved as JSON in
+## grant), Echo perks, solved theories, memories (記憶, scripts/data/story.gd)
+## and lifetime stats. Saved as JSON in
 ## user:// so a run can be killed at any time without losing knowledge.
 ## Knowledge and records are keyed by scenario id; Echoes are shared.
 
@@ -8,7 +9,9 @@ signal changed
 
 const SAVE_NAME := "keep_living_meta.json"
 const SAVE_PATH := "user://" + SAVE_NAME
-const TEST_SAVE_PATH := "user://keep_living_meta_smoke.json"
+## Smoke tests save per process: several checkouts can run them at once and
+## they all share the one user dir.
+const TEST_SAVE_PATH := "user://keep_living_meta_smoke_%d.json"
 ## Where saves lived before project.godot set a custom user dir ("KeepLiving").
 const OLD_USER_DIR := "Godot/app_userdata/Keep Living"
 const SAVE_VERSION := 2
@@ -24,13 +27,17 @@ var last_death := {}                  # {"cause": String, "day": int, "scenario"
 ## Per scenario: {"runs", "deaths", "wins", "best_day", "last_death"}.
 var records: Dictionary = {}
 var last_scenario := ""
+## Story fragments found, in the order found (shared by every scenario, kept forever).
+var memories: Array = []
+## The final scenario's true ending (opening the door on Monday) has been seen.
+var true_ending := false
 var save_path := SAVE_PATH
 
 
 func _ready() -> void:
 	if "--smoke-test" in OS.get_cmdline_user_args():
 		# Automated runs never touch the player's real save.
-		save_path = TEST_SAVE_PATH
+		save_path = TEST_SAVE_PATH % OS.get_process_id()
 		reset_all()
 	else:
 		_migrate_old_save()
@@ -90,6 +97,28 @@ func is_theory_solved(scenario_id: String) -> bool:
 
 func solve_theory(scenario_id: String) -> void:
 	solved_theories[scenario_id] = true
+	save_data()
+	changed.emit()
+
+
+# --- Memories (記憶) ----------------------------------------------------------
+
+func knows_memory(id: String) -> bool:
+	return id in memories
+
+
+## Returns true if the memory is new.
+func learn_memory(id: String) -> bool:
+	if knows_memory(id):
+		return false
+	memories.append(id)
+	save_data()
+	changed.emit()
+	return true
+
+
+func see_true_ending() -> void:
+	true_ending = true
 	save_data()
 	changed.emit()
 
@@ -179,6 +208,8 @@ func reset_all() -> void:
 	last_death = {}
 	records = {}
 	last_scenario = ""
+	memories = []
+	true_ending = false
 	save_data()
 	changed.emit()
 
@@ -198,6 +229,8 @@ func save_data() -> void:
 		"last_death": last_death,
 		"records": records,
 		"last_scenario": last_scenario,
+		"memories": memories,
+		"true_ending": true_ending,
 	}
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
@@ -229,6 +262,12 @@ func load_data() -> void:
 		last_death["day"] = int(last_death["day"])
 	records = data.get("records", {})
 	last_scenario = str(data.get("last_scenario", ""))
+	# Saves from before the story layer have neither key.
+	memories = []
+	for m in data.get("memories", []):
+		if not memories.has(str(m)):
+			memories.append(str(m))
+	true_ending = bool(data.get("true_ending", false))
 	if int(data.get("version", 1)) < 2 and records.is_empty() and runs > 0:
 		# v1 saves only had Outbreak: its totals are Outbreak's record.
 		records["zombie"] = {"runs": runs, "deaths": deaths, "wins": wins, "best_day": best_day,

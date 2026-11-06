@@ -6,10 +6,12 @@ extends Node
 ## Prints "SMOKE OK" and exits 0 on success, exits 1 on the first failure.
 
 const Scenarios := preload("res://scripts/data/scenarios.gd")
+const Story := preload("res://scripts/data/story.gd")
 
 var main: Node
 var _shots_dir := ""
-var _failed := false
+## Static: a failure in one scene load must still fail the final verdict.
+static var _failed := false
 
 
 func _ready() -> void:
@@ -64,6 +66,27 @@ func _pose(player, pos: Vector3, target: Vector3) -> void:
 	player.head.rotation.x = atan2(d.y, Vector2(d.x, d.z).length())
 
 
+## Close every reading popup that's up or queued (clues and memories).
+func _close_all(hud) -> void:
+	for i in 12:
+		if hud.overlay_kind != "reading":
+			return
+		hud._close()
+
+
+## All the text currently in the overlay (labels only).
+func _overlay_text(hud) -> String:
+	var parts: Array = []
+	for l in hud.overlay_box.find_children("*", "Label", true, false):
+		parts.append(l.text)
+	return "\n".join(parts)
+
+
+func _saved() -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(Meta.save_path))
+	return parsed if parsed is Dictionary else {}
+
+
 ## Extra views of materials and fittings (`--tour`, with --shots), daytime.
 func _tour(player, apt) -> void:
 	apt.doors["bath_door"].set_open(true)
@@ -112,6 +135,15 @@ func _run() -> void:
 		5:
 			_tide_second_life()
 			return
+		6:
+			_monday_life()
+			return
+		7:
+			_monday_after_suit()
+			return
+		8:
+			_after_true_ending()
+			return
 	print("SMOKE: start (runs so far: %d)" % Meta.runs)
 	var hud = main.hud
 	var player = main.player
@@ -144,6 +176,46 @@ func _run() -> void:
 	_check(Meta.knows_clue("zombie", "jalert"), "phone gives the J-ALERT clue")
 	_check(hud.overlay_kind == "reading" and get_tree().paused, "clue popup pauses the game")
 	await _shot("03_clue")
+	hud._close()
+
+	# Memories (記憶): the phone holds one once its clue is read, a search finds one.
+	_check(phone.get_prompt(false) != "", "the phone still has something to show (a memory)")
+	phone.perform(false)
+	await _wait(0.2)
+	_check(Meta.knows_memory("missed_calls") and hud.overlay_kind == "reading", "the phone gives the missed-calls memory")
+	await _shot("03b_memory")
+	_close_all(hud)
+	var said: Array = []
+	var on_say := func(t, _k): said.append(t)
+	Game.message.connect(on_say)
+	apt.nav_region.get_node("kitchen_cabinets").perform(false)
+	Game.message.disconnect(on_say)
+	_check(Meta.knows_memory("rice_bag"), "searching the kitchen cabinets finds a memory")
+	var loot_line: String = said[0] if said.size() > 0 else ""
+	_check(loot_line.begins_with("Kitchen cabinets: ") and loot_line.ends_with("(+3 food)") and not "\n" in loot_line,
+		"the loot line names one object (%s)" % loot_line)
+	_close_all(hud)
+	_check(apt.nav_region.get_node("kitchen_cabinets").get_prompt(false) == "", "a searched container can't be searched again this life")
+	_check("rice_bag" in _saved().get("memories", []) and "missed_calls" in _saved().get("memories", []), "memories are saved to disk")
+	var clock_spot = apt.keepsakes.get("wall_clock")
+	_check(clock_spot != null and clock_spot.collision_layer == 32, "the wall clock is a hidden spot (look-ray layer only)")
+	_pose(player, Vector3(3.8, 0.05, 1.8), Vector3(2.83, 2.2, 1.8))
+	await _wait(0.3)
+	_check(player.focus == clock_spot and "wall clock" in clock_spot.get_prompt(false), "looking up at the wall clock focuses it (focus: %s)" % [player.focus.name if player.focus else "none"])
+	clock_spot.perform(false)
+	await _wait(0.1)
+	_check(Meta.knows_memory("wall_clock"), "the wall clock gives its memory")
+	_close_all(hud)
+	await _wait(0.1)
+	_check(clock_spot.collision_layer == 0, "a hidden spot goes quiet once it's been looked at this life")
+	_check(apt.keepsakes["breaker"].collision_layer == 0, "spots with nothing yet stay out of the look-ray")
+	hud._show_journal()
+	await _wait(0.3)
+	_check("記憶" in _overlay_text(hud) and "2 / 6" in _overlay_text(hud) and "…" in _overlay_text(hud), "the journal lists memories by thread, unknown ones as …")
+	if hud.journal_memories_anchor:
+		hud._ov_scroll.scroll_vertical = int(hud.journal_memories_anchor.position.y)
+	await _wait(0.1)
+	await _shot("03c_journal_memories")
 	hud._close()
 
 	# Walking: from the genkan up the step into the hallway.
@@ -319,6 +391,7 @@ func _second_life() -> void:
 	var hud = main.hud
 	await _wait(0.5)
 	_check(hud.overlay_kind == "intro", "intro card is shown again")
+	_check("Morning number 2." in _overlay_text(hud) and "Monday" in _overlay_text(hud), "the intro counts the mornings")
 	_check(Meta.perks.size() == 1, "the chosen Echo carried over")
 	_check(Meta.knows_clue("zombie", "jalert"), "clues are remembered after death")
 	hud._start_run()
@@ -332,6 +405,15 @@ func _second_life() -> void:
 	Game.clue_found.disconnect(on_clue)
 	_check(seen == [false], "re-reading a known clue isn't treated as new")
 	_check(Meta.best_day_in("zombie") >= 1 and Meta.runs_in("zombie") == 2, "Outbreak keeps its own record (best day %d)" % Meta.best_day_in("zombie"))
+	_check(Meta.knows_memory("rice_bag") and Meta.knows_memory("wall_clock"), "memories are remembered after death")
+	_close_all(hud)
+	# A note in your own handwriting, with your last death in it.
+	Game.find_memory("hand_stove")
+	await _wait(0.3)
+	var hand_text := _overlay_text(hud)
+	_check("was smoke test. Don't do that again" in hand_text, "{last_cause} reads naturally in the note")
+	await _shot("12_memory_handwriting")
+	_close_all(hud)
 	if _failed:
 		print("SMOKE FAILED")
 		await _quit(1)
@@ -476,6 +558,8 @@ func _ash_life() -> void:
 	Game.advance_minutes(16 * 60 - Game.minutes)
 	await _wait(0.2)
 	_check(not Game.power_on, "the power fails on day 2")
+	var story_dir = main.get_node_or_null("StoryDirector")
+	_check(story_dir != null and story_dir.fired.has("siren"), "omen: a siren stops outside at the first dawn")
 
 	# Looters at the front door.
 	Game.heal(Game.max_health)
@@ -819,6 +903,146 @@ func _tide_second_life() -> void:
 	_check(hud.overlay_kind == "end", "Tide death screen is shown")
 	await _shot("41_tide_death")
 	_check(bed_w.broken, "the window is blown in")
+	if _failed:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	# Force-unlock the final scenario: two rescues are real (Ash, Tide); give
+	# every key memory and enough others.
+	_check(not Scenarios.monday_unlocked(), "Monday is locked before the memories are found")
+	for id in Story.key_ids():
+		Meta.learn_memory(id)
+	for f in Story.FRAGMENTS:
+		if Meta.memories.size() >= Scenarios.MONDAY.UNLOCK_MEMORIES:
+			break
+		Meta.learn_memory(f["id"])
+	_check(Scenarios.monday_unlocked(), "rescues, 18 memories and every key one unlock Monday")
+	hud._show_title()
+	await _wait(0.4)
+	var nudge := false
+	for l in hud.title_root.find_children("*", "Label", true, false):
+		if l.text == "A normal Monday.":
+			nudge = true
+	_check(nudge, "the title screen says \"A normal Monday.\"")
+	await _shot("42_title_monday")
+	print("SMOKE: switching to Monday...")
+	hud._title_play("monday")
+
+
+# --- Monday ------------------------------------------------------------------------
+
+func _monday_life() -> void:
+	print("SMOKE: Monday")
+	var hud = main.hud
+	var player = main.player
+	var apt = main.apartment
+	await _wait(0.5)
+	_check(Game.scenario.ID == "monday" and hud.overlay_kind == "intro", "Monday opens on its intro card")
+	await _shot("50_monday_intro")
+	hud._start_run()
+	await _wait(0.3)
+	for n in ["NightDirector", "EventDirector", "AshDirector", "LooterDirector", "TideDirector"]:
+		_check(main.get_node_or_null(n) == null, "no %s on Monday" % n)
+	_check(main.get_node_or_null("MondayDirector") != null and main.get_node_or_null("StoryDirector") != null, "Monday has its morning and the story director")
+	var said: Array = []
+	var on_sub := func(t): said.append(t)
+	Game.subtitle.connect(on_sub)
+	await _wait(6.0)
+	Game.subtitle.disconnect(on_sub)
+	_check(Game.clock_string() == "07:58" and hud.clock_label.text == "07:58", "the clock doesn't move from 07:58")
+	_check(said.size() > 0 and "Tokyo Fire Department" in said[0], "someone knocks, and a voice at the door (%s)" % [said[0] if said.size() > 0 else "none"])
+	_check(Game.walk_mult() < 1.0, "walking is slower")
+	_check(not hud._side_panel.visible and not hud.health_bar.get_parent().visible, "the HUD is nearly empty")
+	var door = apt.barricades["front_door"]
+	_check(door.get_prompt(false) == "Open the door", "the front door can be opened")
+	_pose(player, Vector3(4.6, 0.05, 3.4), Vector3(4.4, 1.0, -0.8))
+	await _wait(3.5)  # let the eye adjust from the bedroom to the bright LDK
+	await _shot("51_monday_morning")
+	# The hidden spots, all there today: the tally on the door, the note under the kotatsu.
+	_check(apt.keepsakes["genkan_door"].collision_layer == 32 and apt.keepsakes["kotatsu"].collision_layer == 32, "every hidden spot can be looked at on Monday")
+	_pose(player, Vector3(3.35, -0.1, 6.55), Vector3(3.46, 0.25, 7.2))
+	await _wait(1.5)
+	_check(player.focus == apt.keepsakes["genkan_door"], "looking low at the front door finds the scratches (focus: %s)" % [player.focus.name if player.focus else "none"])
+	await _shot("51b_monday_door_marks")
+	_pose(player, Vector3(5.7, 0.05, 2.3), Vector3(5.05, 0.0, 2.0))
+	await _wait(1.0)
+	_check(player.focus == apt.keepsakes["kotatsu"], "looking under the kotatsu finds the note (focus: %s)" % [player.focus.name if player.focus else "none"])
+	await _shot("51c_monday_kotatsu")
+	# Every container shows its memory again, with what you understand now.
+	apt.nav_region.get_node("kitchen_cabinets").perform(false)
+	await _wait(0.3)
+	var txt := _overlay_text(hud)
+	_check(hud.overlay_kind == "reading" and Story.get_fragment("rice_bag")["understand"] in txt, "a container shows its memory again, understood")
+	await _shot("52_monday_memory")
+	_close_all(hud)
+	var closet = apt.nav_region.get_node("bedroom_closet")
+	_check(closet.get_prompt(false) == "Put on the suit" and closet.get_prompt(true) != "", "the closet offers the suit (E) and its memories (R)")
+	# The suit: back to 07:58, back to the title, no credits.
+	closet.perform(false)
+	Engine.time_scale = 4.0
+	await _wait(3.0)
+	_check(hud.ending_step != "" and not Meta.true_ending, "the suit ending plays (and isn't the true one)")
+	await _wait(40.0)  # the scene reloads before this ends
+
+
+func _monday_after_suit() -> void:
+	Engine.time_scale = 1.0
+	print("SMOKE: Monday, after the suit")
+	var hud = main.hud
+	await _wait(0.5)
+	_check(hud.overlay_kind == "title", "the suit ending goes back to the title")
+	_check(not Meta.true_ending and Game.scenario.ID == "monday", "Monday is still open")
+	hud._title_play("monday")
+	await _wait(0.4)
+	_check(hud.overlay_kind == "intro", "Monday again")
+	hud._start_run()
+	await _wait(0.5)
+	var apt = main.apartment
+	apt.barricades["front_door"].perform(false)
+	for i in 200:  # real time: the screenshots need the text up
+		await _wait(0.25)
+		if hud.ending_step == "message":
+			break
+	await _wait(1.2)
+	await _shot("53_ending_message")
+	_check(Meta.true_ending, "opening the door marks the true ending")
+	var saved := _saved()
+	_check(bool(saved.get("true_ending", false)), "the true ending is in the save file (%s: %s)" % [Meta.save_path, saved.get("true_ending", "missing")])
+	for i in 200:
+		await _wait(0.25)
+		if hud.ending_step == "last":
+			break
+	await _wait(1.6)
+	await _shot("54_ending_you_keep_living")
+	Engine.time_scale = 3.0
+	for i in 200:
+		await _wait(0.25)
+		if hud.ending_step == "credits":
+			break
+	await _wait(9.0)
+	Engine.time_scale = 1.0
+	_check(hud.overlay_kind == "credits_roll", "the credits roll over the flat")
+	await _shot("55_credits")
+	var done: Button = hud.root.find_child("credits_done", true, false)
+	_check(done != null, "the credits have a way back to the title")
+	if done:
+		done.pressed.emit()  # reloads the scene: this node is gone after this
+	else:
+		hud._go_title()
+
+
+func _after_true_ending() -> void:
+	print("SMOKE: after the true ending")
+	var hud = main.hud
+	await _wait(0.6)
+	_check(hud.overlay_kind == "title" and Meta.true_ending, "back at the title after the credits")
+	await _shot("56_title_after")
+	hud._show_scenarios()
+	await _wait(0.4)
+	_check("完" in _overlay_text(hud), "Monday is marked 完 on the scenario select")
+	hud._ov_scroll.scroll_vertical = 100000
+	await _wait(0.2)
+	await _shot("57_scenarios_monday_done")
 	print("SMOKE OK" if not _failed else "SMOKE FAILED")
 	await _quit(1 if _failed else 0)
 
@@ -829,6 +1053,9 @@ func _quit(code: int) -> void:
 		for p in get_tree().root.find_children("*", kind, true, false):
 			p.stop()
 			p.stream = null
-	await get_tree().process_frame
-	await get_tree().process_frame
+	# Let the audio thread drop the playbacks (ambience and the heartbeat can
+	# still be fading out when the run ends on the title).
+	for i in 10:
+		await get_tree().process_frame
+	DirAccess.remove_absolute(Meta.save_path)  # per-process test save
 	get_tree().quit(code)

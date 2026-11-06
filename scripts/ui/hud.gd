@@ -8,6 +8,7 @@ const Scenarios := preload("res://scripts/data/scenarios.gd")
 const Menus := preload("res://scripts/ui/menus.gd")
 const Perks := preload("res://scripts/data/perks.gd")
 const UI := preload("res://scripts/ui/ui_style.gd")
+const Story := preload("res://scripts/data/story.gd")
 
 # Roles -> the "Office hours" palette (scripts/ui/ui_style.gd).
 const C_TEXT := UI.PAPER
@@ -22,6 +23,7 @@ var barricades := {}
 var seal = null           # Ash: scripts/systems/seal.gd (from the AshDirector)
 var seal_mode := false
 var storm_mode := false   # Tide: entrances are glass against the storm
+var monday_mode := false  # the final scenario: a nearly empty HUD, the clock stopped
 var tide = null           # Tide: the TideDirector (its storm guard, warnings)
 var battery_bar: ProgressBar
 var battery_row: Control
@@ -114,7 +116,8 @@ static var _hint_uses := {}
 var overlay: ColorRect
 var overlay_box: VBoxContainer
 var overlay_kind := ""  # intro | reading | journal | pause | manual | end
-var _reading_queue: Array = []
+var _reading_queue: Array = []   # [kind ("clue" | "memory"), id, is_new]
+var _white: ColorRect             # the omen flash and the Monday endings
 var _erase_armed := false
 var _erase_button: Button
 var _hud_boxes: Array = []  # HUD panel styles whose top rule turns red at night
@@ -146,6 +149,7 @@ func _ready() -> void:
 	if ash:
 		seal = ash.seal
 	storm_mode = Game.is_storm_mode()
+	monday_mode = Game.is_monday()
 	tide = get_parent().get_node_or_null("TideDirector") if get_parent() else null
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -163,12 +167,18 @@ func _ready() -> void:
 	_build_eew()
 	_build_captions()
 	_build_overlay()
+	_build_white()
+	if monday_mode:
+		_monday_hud()
 	Sfx.played.connect(_on_sound)
 
 	Game.message.connect(_on_message)
 	Game.earthquake_warning.connect(_on_earthquake_warning)
 	Game.earthquake.connect(_on_earthquake)
 	Game.clue_found.connect(_on_clue_found)
+	Game.memory_found.connect(_on_memory_found)
+	Game.subtitle.connect(_show_subtitle)
+	Game.ending_requested.connect(_on_ending)
 	Game.player_died.connect(_on_player_died)
 	Game.run_won.connect(_on_run_won)
 	Game.choice_requested.connect(_show_choice)
@@ -502,6 +512,8 @@ func _build_help() -> void:
 		var id: String = h[0]
 		if _hint_uses.get(id, 0) >= HINT_USES or (id == "mask" and not (seal_mode or storm_mode)):
 			continue
+		if monday_mode and id not in ["look", "move", "use", "journal", "pause"]:
+			continue  # nothing to fight, eat or light today
 		var chip := PanelContainer.new()
 		chip.add_theme_stylebox_override("panel", UI.chip_box())
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -590,10 +602,16 @@ func _refresh_vignette(delta: float) -> void:
 	if low > 0.0 and not get_tree().paused:
 		# A slow heartbeat in the dark edges.
 		low *= 0.85 + 0.15 * sin(Time.get_ticks_msec() * 0.006)
-	vignette.visible = _hurt > 0.001 or low > 0.001
+	var beat := 0.0
+	if monday_mode and Game.is_alive_phase():
+		# A slow heartbeat (about 48 a minute): lub, dub, a long rest.
+		var ph := fmod(Time.get_ticks_msec() / 1000.0, 1.25)
+		beat = 0.32 + 0.5 * exp(-pow((ph - 0.08) / 0.07, 2.0)) + 0.32 * exp(-pow((ph - 0.32) / 0.08, 2.0))
+	vignette.visible = _hurt > 0.001 or low > 0.001 or beat > 0.0
 	if vignette.visible:
 		_vignette_mat.set_shader_parameter("hurt", _hurt)
 		_vignette_mat.set_shader_parameter("low", low)
+		_vignette_mat.set_shader_parameter("beat", beat)
 
 
 # --- Earthquake early warning (緊急地震速報) ------------------------------------------
@@ -717,8 +735,19 @@ func _capture_mouse(captured: bool) -> void:
 # --- Per-frame refresh ------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	day_label.text = "%d日目" % Game.day
+	day_label.text = "10月28日(月)" if monday_mode else "%d日目" % Game.day
 	clock_label.text = Game.clock_string()
+	if monday_mode:
+		phase_label.text = "月曜日  MONDAY" if Game.is_alive_phase() else ""
+		_refresh_prompt()
+		_refresh_vignette(delta)
+		_layout_t -= delta
+		if _layout_t <= 0.0:
+			_layout_t = 0.25
+			_fit_feed()
+		_pad_scroll(delta)
+		_title_sway()
+		return
 	match Game.phase:
 		Game.Phase.NIGHT:
 			phase_label.text = "夜  NIGHT %d / %d" % [Game.day, Game.nights_goal()]
@@ -772,7 +801,11 @@ func _process(delta: float) -> void:
 		_layout_t = 0.25
 		_fit_feed()
 	_pad_scroll(delta)
-	if overlay_kind == "title" and player and has_meta("title_yaw"):
+	_title_sway()
+
+
+func _title_sway() -> void:
+	if overlay_kind in ["title", "credits_roll"] and player and has_meta("title_yaw"):
 		# A slow look around the room behind the title.
 		player.rotation.y = get_meta("title_yaw") + sin(Time.get_ticks_msec() * 0.00012) * 0.12
 
@@ -1042,6 +1075,9 @@ const CAPTIONS := {
 	"knock": "Knocking at the front door",
 	"debris_hit": "Something slams into the glass",
 	"boat": "An outboard motor",
+	"siren": "A siren, coming closer (ピーポー)",
+	"train_far": "A train, far off",
+	"defib": "A whine, then a thump",
 }
 
 
@@ -1054,6 +1090,29 @@ func _build_captions() -> void:
 	caption_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	caption_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(caption_box)
+
+
+## A spoken line (omens, the voice at the door). Always shown: it's the story.
+func _show_subtitle(text: String) -> void:
+	var l := _label(text, 22, UI.WHITE)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(580, 0)
+	l.add_theme_font_override("font", UI.regular_font())
+	var plate := PanelContainer.new()
+	plate.add_theme_stylebox_override("panel", UI.box(Color(0, 0, 0, 0.78), Color(0, 0, 0, 0), 0, 8))
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.add_child(l)
+	caption_box.add_child(plate)
+	while caption_box.get_child_count() > 3:
+		var old := caption_box.get_child(0)
+		caption_box.remove_child(old)
+		old.queue_free()
+	var tw := plate.create_tween()
+	tw.tween_interval(5.0)
+	tw.tween_property(plate, "modulate:a", 0.0, 0.8)
+	tw.tween_callback(plate.queue_free)
 
 
 func _on_sound(sound: String, pos: Variant) -> void:
@@ -1251,6 +1310,7 @@ func _open(kind: String, jp: String = "", en: String = "") -> void:
 	for c in _ov_header.get_children():
 		_ov_header.remove_child(c)
 		c.queue_free()
+	_ov_header_style.bg_color = UI.ALERT_RED
 	_ov_header.visible = jp != ""
 	if jp != "":
 		var title := _bilingual(jp, en, 42, 20, UI.WHITE, UI.WHITE)
@@ -1320,7 +1380,10 @@ func _close() -> void:
 	_capture_mouse(Game.is_alive_phase())
 	if _reading_queue.size() > 0:
 		var next: Array = _reading_queue.pop_front()
-		_show_reading(next[0], next[1])
+		if next[0] == "memory":
+			_show_memory(next[1], next[2])
+		else:
+			_show_reading(next[1], next[2])
 
 
 func _text(text: String, font_size: int = UI.FS_BODY, color: Color = Color.TRANSPARENT) -> Label:
@@ -1408,6 +1471,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _back(event):
 				_show_pause()
 				get_viewport().set_input_as_handled()
+		"credits_roll":
+			if _back(event) or event.is_action_pressed("interact") and not event is InputEventJoypadButton:
+				_go_title()
+				get_viewport().set_input_as_handled()
 		"intro":
 			if event.is_action_pressed("interact") and not event is InputEventJoypadButton:
 				_start_run()  # keyboard E; on a pad, A presses the focused button
@@ -1432,22 +1499,25 @@ func _show_intro() -> void:
 	var body := ""
 	var lives: int = Meta.runs_in(s.ID)
 	if lives == 0:
-		body = s.INTRO_FIRST
+		body = Story.fill(s.INTRO_FIRST, 1)
 	else:
-		body = s.INTRO_AGAIN
+		body = Story.fill(s.INTRO_AGAIN, 1)  # the morning about to start
 		var ld: Dictionary = Meta.last_death_in(s.ID)
 		if ld.has("cause"):
 			body += "\nLast time: %s (day %d)" % [ld["cause"], ld["day"]]
 	overlay_box.add_child(_text(body, 22))
 	var known := Meta.known_clue_list(s.ID).size()
-	if lives > 0:
+	if monday_mode:
+		overlay_box.add_child(_text("You remember %d of %d memories." % [Meta.memories.size(), Story.FRAGMENTS.size()], UI.FS_BODY, oc_dim))
+	elif lives > 0:
 		overlay_box.add_child(_text("You remember %d of %d clues.  Lives lived: %d  Best: day %d" % [known, s.CLUES.size(), lives, Meta.best_day_in(s.ID)], UI.FS_BODY, oc_dim))
-	if Meta.perks.size() > 0:
+	if Meta.perks.size() > 0 and not monday_mode:
 		var names: Array = []
 		for p in Meta.perks:
 			names.append(Perks.PERKS[p]["title"])
 		overlay_box.add_child(_text("Echoes: " + ", ".join(names), UI.FS_BODY, oc_good))
-	overlay_box.add_child(_text(s.GOAL_TEXT % s.NIGHTS_TO_SURVIVE, UI.FS_BODY, oc_dim))
+	var goal: String = s.GOAL_TEXT % s.NIGHTS_TO_SURVIVE if "%d" in s.GOAL_TEXT else s.GOAL_TEXT
+	overlay_box.add_child(_text(goal, UI.FS_BODY, oc_dim))
 	if s.MODE == "seal":
 		overlay_box.add_child(_text("Hold %s on a door, window or vent to tape it shut. Press %s to put on a dust mask." % [Game.glyph("interact"), Game.glyph("mask")], UI.FS_BODY, oc_good))
 	elif s.MODE == "storm":
@@ -1470,7 +1540,7 @@ func _start_run() -> void:
 
 func _on_clue_found(clue_id: String, is_new: bool) -> void:
 	if overlay_kind != "":
-		_reading_queue.append([clue_id, is_new])
+		_reading_queue.append(["clue", clue_id, is_new])
 		return
 	_show_reading(clue_id, is_new)
 
@@ -1493,11 +1563,131 @@ func _show_reading(clue_id: String, is_new: bool) -> void:
 	_fit_overlay()
 
 
+# Memories (記憶) -------------------------------------------------------------------
+
+func _on_memory_found(memory_id: String, is_new: bool) -> void:
+	if overlay_kind != "":
+		_reading_queue.append(["memory", memory_id, is_new])
+		return
+	_show_memory(memory_id, is_new)
+
+
+## A memory, shown as the object you found: a printed sheet, or a scrap of
+## notepaper in your own handwriting (slanted, a little crooked).
+func _show_memory(memory_id: String, is_new: bool) -> void:
+	var f: Dictionary = Story.get_fragment(memory_id)
+	if f.is_empty():
+		return
+	var th: Dictionary = Story.THREADS[f["thread"]]
+	var hand := Story.is_handwriting(f)
+	Sfx.play("paper", null, -4.0)
+	_open("reading", "記憶 · " + th["jp"], "Memory · " + th["en"])
+	_ov_header_style.bg_color = UI.NAVY
+	var tag_row := HBoxContainer.new()
+	tag_row.add_theme_constant_override("separation", 14)
+	tag_row.add_child(_label("NEW memory. It stays with you, whatever happens." if is_new else "You remember this.",
+		UI.FS_NOTE, oc_good if is_new else oc_dim))
+	if f["key"]:
+		tag_row.add_child(_label("◆ This one matters.", UI.FS_NOTE, UI.SIGN_WARN))
+	overlay_box.add_child(tag_row)
+	var paper := PanelContainer.new()
+	paper.add_theme_stylebox_override("panel", UI.paper_box(hand))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	paper.add_child(col)
+	var title := _label(f["title"], 26, UI.INK)
+	title.add_theme_font_override("font", UI.bold_font())
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.custom_minimum_size = Vector2(720, 0)
+	col.add_child(title)
+	col.add_child(_label("Found: " + Story.SOURCE_NAMES.get(f["source"], "somewhere in the flat"), UI.FS_NOTE, UI.SIGN_DIM))
+	var body := _label(Story.text_of(memory_id), 24 if hand else 22, UI.NOTE_INK if hand else UI.INK)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(720, 0)
+	body.add_theme_font_override("font", UI.hand_font() if hand else UI.doc_font())
+	body.add_theme_constant_override("line_spacing", 7 if hand else 4)
+	col.add_child(body)
+	if monday_mode and f.get("understand", "") != "":
+		var rule := ColorRect.new()
+		rule.color = UI.DOC_EDGE
+		rule.custom_minimum_size = Vector2(0, 2)
+		col.add_child(rule)
+		var u := _label(str(f["understand"]), 22, UI.JR_GREEN)
+		u.add_theme_font_override("font", UI.bold_font())
+		u.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		u.custom_minimum_size = Vector2(720, 0)
+		col.add_child(u)
+	if hand:
+		# A red margin rule and a strip of tape, and the scrap sits a little crooked.
+		paper.draw.connect(func():
+			paper.draw_line(Vector2(12, 0), Vector2(12, paper.size.y), Color(0.85, 0.3, 0.3, 0.45), 2.0)
+			paper.draw_rect(Rect2(paper.size.x * 0.5 - 50, -10, 100, 24), Color(0.95, 0.92, 0.75, 0.75)))
+		var holder := Control.new()
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(paper)
+		paper.position = Vector2(10, 12)
+		paper.rotation = deg_to_rad(-0.9)
+		var fit := func():
+			holder.custom_minimum_size = paper.size + Vector2(20, 26)
+			paper.pivot_offset = paper.size * 0.5
+		paper.resized.connect(fit)
+		overlay_box.add_child(holder)
+		fit.call()
+	else:
+		overlay_box.add_child(paper)
+	overlay_box.add_child(_button("閉じる  Close  [%s]" % Game.glyph("accept"), _close))
+	_fit_overlay()
+
+
+var journal_memories_anchor: Control  # the section heading (smoke test scrolls to it)
+
+
+## The journal's 記憶 section: every thread with its count; unknown memories are "…".
+func _journal_memories() -> void:
+	journal_memories_anchor = _section("記憶", "Memories   %d / %d" % [Meta.memories.size(), Story.FRAGMENTS.size()])
+	overlay_box.add_child(journal_memories_anchor)
+	overlay_box.add_child(_text("Found in every life and every scenario. ◆ marks a memory that matters.", UI.FS_NOTE, oc_dim))
+	for thread in Story.THREAD_ORDER:
+		var frags: Array = Story.in_thread(thread)
+		var found := 0
+		for f in frags:
+			if Meta.knows_memory(f["id"]):
+				found += 1
+		var th: Dictionary = Story.THREADS[thread]
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 12)
+		var jp := _label(th["jp"], 26, oc_accent)
+		jp.add_theme_font_override("font", UI.bold_font())
+		head.add_child(jp)
+		var en := _label(th["en"], UI.FS_BODY, oc_text)
+		en.size_flags_vertical = Control.SIZE_SHRINK_END
+		head.add_child(en)
+		var cnt := _label("%d / %d" % [found, frags.size()], UI.FS_BODY, oc_dim)
+		cnt.size_flags_vertical = Control.SIZE_SHRINK_END
+		head.add_child(cnt)
+		overlay_box.add_child(head)
+		for f in frags:
+			var mark := "  ◆" if f["key"] else ""
+			if not Meta.knows_memory(f["id"]):
+				overlay_box.add_child(_label("…" + mark, 22, oc_dim))
+				continue
+			var tag := "  (new this life)" if f["id"] in Game.run_new_memories else ""
+			overlay_box.add_child(_heading(f["title"] + mark + tag, 22))
+			var t := _text(Story.text_of(f["id"]), UI.FS_BODY, UI.NOTE_INK if Story.is_handwriting(f) else oc_dim)
+			if Story.is_handwriting(f):
+				t.add_theme_font_override("font", UI.hand_font())
+			overlay_box.add_child(t)
+
+
 # Journal ----------------------------------------------------------------------------
 
 func _show_journal() -> void:
 	_open("journal", "手帳", "Journal")
 	overlay_box.add_child(_label("What you've pieced together (this persists through death)", UI.FS_NOTE, oc_dim))
+	if monday_mode:
+		_journal_memories()
+		_journal_echoes()
+		return
 	overlay_box.add_child(_section("手がかり", "Clues"))
 	for clue_id in Game.scenario.CLUES:
 		var clue: Dictionary = Game.scenario.CLUES[clue_id]
@@ -1532,14 +1722,20 @@ func _show_journal() -> void:
 	else:
 		overlay_box.add_child(_text("You need at least %d clues before you can name it." % Game.scenario.THEORY_MIN_CLUES, UI.FS_BODY, oc_dim))
 
+	_journal_memories()
+	_journal_echoes()
+
+
+func _journal_echoes() -> void:
 	overlay_box.add_child(_section("残響", "Echoes"))
 	if Meta.perks.is_empty():
 		overlay_box.add_child(_text("None yet. Each death leaves you a small advantage.", UI.FS_BODY, oc_dim))
 	for p in Meta.perks:
 		overlay_box.add_child(_text("%s: %s" % [Perks.PERKS[p]["title"], Perks.PERKS[p]["desc"]], UI.FS_BODY, oc_good))
 	var sid: String = Game.scenario.ID
-	overlay_box.add_child(_text("%s: lives %d   Rescues %d   Best: day %d%s" % [Game.scenario.TITLE,
-		Meta.runs_in(sid), Meta.wins_in(sid), Meta.best_day_in(sid), _kills_text("   %s this life: %d")], UI.FS_BODY, oc_dim))
+	if not monday_mode:
+		overlay_box.add_child(_text("%s: lives %d   Rescues %d   Best: day %d%s" % [Game.scenario.TITLE,
+			Meta.runs_in(sid), Meta.wins_in(sid), Meta.best_day_in(sid), _kills_text("   %s this life: %d")], UI.FS_BODY, oc_dim))
 	overlay_box.add_child(_button("閉じる  Close  [%s]" % Game.glyph("journal"), _close))
 	_fit_overlay()
 
@@ -1661,6 +1857,8 @@ func _kills_text(fmt: String) -> String:
 
 func _on_player_died(cause: String) -> void:
 	await get_tree().create_timer(1.4).timeout
+	if Meta.runs >= int(Story.omen("clear").get("from", 99)):
+		await _clear_flash()
 	_open("end")
 	_ov_frame_end.bg_color = UI.ALERT_RED
 	overlay_box.add_child(_poster_title("死亡", "YOU DIED", UI.ALERT_RED))
@@ -1703,6 +1901,12 @@ func _on_run_won() -> void:
 	var story := _text(Game.scenario.RESCUE_TEXT % Game.day, 22)
 	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay_box.add_child(story)
+	var closing := Story.rescue_line(Game.scenario.ID)
+	if closing != "":
+		var cl := _text(closing, 22, UI.PAPER)
+		cl.add_theme_font_override("font", UI.hand_font())
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		overlay_box.add_child(cl)
 	if Game.end_note != "":
 		var note := _text(Game.end_note, UI.FS_BODY, UI.SIGN_YELLOW)
 		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1717,3 +1921,215 @@ func _on_run_won() -> void:
 	again.add_child(_button("タイトルへ  Title screen", _go_title))
 	overlay_box.add_child(again)
 	_fit_overlay()
+
+
+# The final scenario (Monday) ------------------------------------------------------------
+
+## Nearly empty: the date, the stopped clock and nothing else.
+func _monday_hud() -> void:
+	for bar in [health_bar, hunger_bar, thirst_bar]:
+		bar.get_parent().visible = false
+	noise_row.visible = false
+	inv_label.visible = false
+	info_label.visible = false
+	_side_panel.visible = false
+
+
+## The white used by the "Clear!" omen and both Monday endings: a full-screen
+## sheet over everything, with a column for lines of text.
+var _white_box: VBoxContainer
+## Where an ending has got to (smoke test): "" | "white" | "line" | "message" | "last" | "credits".
+var ending_step := ""
+
+
+func _step(step: String) -> void:
+	ending_step = step
+	print("STORY: ending step %s (%d ms)" % [step, Time.get_ticks_msec()])
+
+
+func _build_white() -> void:
+	_white = ColorRect.new()
+	_white.color = Color(1, 1, 1, 0)
+	_white.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_white.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_white.visible = false
+	root.add_child(_white)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_white.add_child(center)
+	_white_box = VBoxContainer.new()
+	_white_box.add_theme_constant_override("separation", 24)
+	_white_box.custom_minimum_size = Vector2(900, 0)
+	_white_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(_white_box)
+
+
+func _white_label(text: String, size: int, font: Font = null, color: Color = UI.INK) -> Label:
+	var l := _label(text, size, color)
+	l.add_theme_constant_override("outline_size", 0)
+	l.add_theme_font_override("font", font if font else UI.regular_font())
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(900, 0)
+	return l
+
+
+func _white_clear() -> void:
+	for c in _white_box.get_children():
+		_white_box.remove_child(c)
+		c.queue_free()
+
+
+## Omen, from life 7: on death, a beat of white light and a voice.
+func _clear_flash() -> void:
+	Sfx.play("defib", null, -3.0, 0.0)
+	await get_tree().create_timer(1.25, true).timeout
+	_white_clear()
+	_white_box.add_child(_white_label("「Clear!」", 64, UI.bold_font()))
+	_white.color = Color(1, 1, 1, 0)
+	_white.modulate.a = 1.0
+	_white.visible = true
+	var tw := _white.create_tween()
+	tw.tween_property(_white, "color:a", 1.0, 0.06)
+	tw.tween_interval(0.5)
+	tw.tween_property(_white, "modulate:a", 0.0, 0.7)
+	await tw.finished
+	_white.visible = false
+	_white.modulate.a = 1.0
+	print("STORY: omen clear")
+
+
+func _fade_white(to: float, seconds: float) -> void:
+	_white.visible = true
+	var tw := _white.create_tween()
+	tw.tween_property(_white, "color:a", to, seconds)
+	await tw.finished
+
+
+## One line at a time on the white: in, hold, out.
+func _white_line(text: String, hold: float, size: int = 34, font: Font = null) -> void:
+	_white_clear()
+	var l := _white_label(text, size, font)
+	l.modulate.a = 0.0
+	_white_box.add_child(l)
+	var tw := l.create_tween()
+	tw.tween_property(l, "modulate:a", 1.0, 0.6)
+	tw.tween_interval(hold)
+	tw.tween_property(l, "modulate:a", 0.0, 0.6)
+	await tw.finished
+
+
+## Monday's two endings: "suit" (back to 07:58, no credits) or "door".
+func _on_ending(kind: String) -> void:
+	if ending_step != "":
+		return
+	_step("white")
+	overlay_kind = "ending"
+	_reading_queue.clear()
+	get_tree().paused = true
+	_capture_mouse(false)
+	print("STORY: ending ", kind)
+	if kind == "door":
+		Meta.see_true_ending()  # saved before anything else can go wrong
+	_white_clear()
+	_white.color = Color(1, 1, 1, 0)
+	await _fade_white(1.0, 1.8)
+	_step("line")
+	if kind == "suit":
+		for i in Story.MONDAY_SUIT.size():
+			if i == 2:
+				Sfx.play("phone_buzz", null, 0.0, 0.0)
+			await _white_line(Story.MONDAY_SUIT[i], 1.8)
+		_step("last")
+		await _white_line(Story.MONDAY_SUIT_LAST, 2.4, 72, UI.bold_font())
+		Game.show_title = true
+		_restart()
+		return
+	for line in Story.MONDAY_DOOR:
+		await _white_line(line, 2.2)
+	_step("message")
+	await _white_line(Story.MONDAY_MESSAGE, 4.2, 30)
+	_step("last")
+	_white_clear()
+	var last := _white_label(Story.MONDAY_LAST, 76, UI.display_font(), UI.INK)
+	last.modulate.a = 0.0
+	_white_box.add_child(last)
+	var tw := last.create_tween()
+	tw.tween_property(last, "modulate:a", 1.0, 1.2)
+	tw.tween_interval(3.2)
+	await tw.finished
+	_start_credits()
+
+
+## Credits over the empty flat: the lights go off room by room, and the clock
+## finally moves on to 07:59.
+func _start_credits() -> void:
+	_step("credits")
+	overlay_kind = "credits_roll"
+	overlay.visible = false
+	_set_front_end(true)
+	Menus.pose_title_camera(self)
+	var story = get_parent().get_node_or_null("StoryDirector") if get_parent() else null
+	if story:
+		story.release_clock()
+	var roll := Control.new()
+	roll.name = "CreditsRoll"
+	roll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	roll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(roll)
+	root.move_child(roll, _white.get_index())  # under the white, so it fades in from it
+	roll.add_child(Menus.side_wash())
+	# The credits are the same as the title screen's, set on the dark wash.
+	oc_text = UI.PAPER
+	oc_dim = UI.DIM
+	oc_good = UI.LINE_GREEN
+	oc_warn = UI.SIGN_YELLOW
+	oc_accent = UI.SIGN_YELLOW
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 12)
+	col.custom_minimum_size = Vector2(820, 0)
+	roll.add_child(col)
+	col.add_child(UI.poster_label("生きていく", 96, UI.SIGN_YELLOW, 10, UI.WHITE, 4))
+	col.add_child(UI.poster_label("KEEP LIVING", 48, UI.WHITE, 7, UI.ALERT_RED, 0))
+	col.add_child(_spacer(0))
+	Menus.credits_content(self, col)
+	col.add_child(_spacer(0))
+	col.add_child(_text("Thank you for staying until the end of the morning.", 22, UI.PAPER))
+	var unlit := _label("88:88", 96, Color(UI.PAPER, 0.08))
+	unlit.add_theme_font_override("font", UI.clock_font())
+	unlit.add_theme_constant_override("outline_size", 0)
+	var lcd := _label("07:59", 96, UI.LCD)
+	lcd.add_theme_font_override("font", UI.clock_font())
+	lcd.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lcd.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	unlit.add_child(lcd)
+	unlit.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	col.add_child(unlit)
+	var vh: float = root.get_viewport_rect().size.y
+	col.position = Vector2(88, vh * 0.55)
+	var done := _button("タイトルへ  Title screen  [%s]" % Game.glyph("accept"), _go_title)
+	done.name = "credits_done"
+	done.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	done.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	done.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	done.position = Vector2(-40, -40)
+	roll.add_child(done)
+	done.grab_focus.call_deferred()
+	await _fade_white(0.0, 2.5)
+	_white.visible = false
+	await get_tree().process_frame
+	var h: float = col.get_combined_minimum_size().y
+	var tw := col.create_tween()
+	tw.tween_property(col, "position:y", vh * 0.5 - h, 48.0)
+	# Lights off, one room at a time (each light is a lamp and its glowing diffuser).
+	var apt = get_parent().get_node_or_null("Apartment") if get_parent() else null
+	if apt:
+		var lights: Array = apt.room_lights
+		for i in range(0, lights.size(), 2):
+			await get_tree().create_timer(3.5, true).timeout
+			if not is_inside_tree():
+				return
+			for j in [i, i + 1]:
+				if j < lights.size() and is_instance_valid(lights[j]):
+					lights[j].visible = false

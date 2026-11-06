@@ -5,8 +5,10 @@ extends RefCounted
 const ZOMBIE := preload("res://scripts/data/scenario_zombie.gd")
 const ASH := preload("res://scripts/data/scenario_ash.gd")
 const TIDE := preload("res://scripts/data/scenario_tide.gd")
+## The final scenario (docs/STORY.md): hidden until scenario_monday.gd's unlock rule passes.
+const MONDAY := preload("res://scripts/data/scenario_monday.gd")
 
-const ALL := [ZOMBIE, ASH, TIDE]
+const ALL := [ZOMBIE, ASH, TIDE, MONDAY]
 const DEFAULT_ID := "zombie"
 
 ## Shown locked on the scenario select.
@@ -42,3 +44,14 @@ static func lock_reason(after_win: Variant) -> String:
 	if names.is_empty():
 		return ""
 	return "Unlocks after your first rescue in %s." % " or ".join(names)
+
+
+## Why scenario `s` can't be played yet ("" = it can).
+static func lock_reason_for(s: Script) -> String:
+	if s == MONDAY:
+		return MONDAY.unlock_reason()
+	return lock_reason(s.UNLOCK_AFTER_WIN)
+
+
+static func monday_unlocked() -> bool:
+	return MONDAY.unlock_reason() == ""

@@ -789,7 +789,7 @@ func _living() -> void:
 	# Game console in front of the TV stand, its cable running behind.
 	_scan(self, "game_console", Vector3(0.32, 0.32, 0.32), Vector3(5.72, 0, 2.38), FACE_W + 0.08)
 	_cable(self, [Vector3(5.85, 0.01, 2.38), Vector3(5.9, 0.01, 2.5), Vector3(5.92, 0.01, 2.6)], Color(0.05, 0.05, 0.05), 0.003)
-	_scan(self, "photo_frame", Vector3(0.15, 0.15, 0.15), Vector3(6.15, Y_TV_STAND, 2.55), FACE_W - 0.3)
+	# The photo frame on the TV stand lies face down: it's a hidden spot (keepsake.gd).
 	# Desk: papers from work, a mug, an energy drink, a binder, the succulent.
 	var dsk := Y_DESK
 	_scan(self, "notepads", Vector3(0.3, 0.3, 0.3), Vector3(5.98, dsk, 0.3), FACE_W + 0.2)

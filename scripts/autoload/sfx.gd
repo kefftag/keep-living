@@ -6,7 +6,7 @@ extends Node
 
 const DIR := "res://assets/audio/"
 const LOOPS := ["gas_hiss", "fridge_hum", "radio_static", "heartbeat", "helicopter", "ambience_day", "ambience_night",
-	"wind_storm", "rain_glass"]
+	"wind_storm", "rain_glass", "birds"]
 
 var _streams := {}     # name -> Array[AudioStream]
 var _ambience: Array = []  # [day player, night player]
@@ -152,7 +152,10 @@ func _process(delta: float) -> void:
 	_fade(_ambience[0], want_day, delta)
 	_fade(_ambience[1], want_night, delta)
 	var low := alive and Game.health < Game.max_health * 0.3
-	_fade(_heartbeat, -4.0 if low else -80.0, delta * 3.0)
+	var hb := -4.0 if low else -80.0
+	if alive and Game.is_monday():
+		hb = -9.0  # something is wrong with you, even this morning
+	_fade(_heartbeat, hb, delta * 3.0)
 
 
 func _fade(p: AudioStreamPlayer, target: float, delta: float) -> void:

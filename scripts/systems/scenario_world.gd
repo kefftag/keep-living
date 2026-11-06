@@ -12,6 +12,8 @@ const TideDirector := preload("res://scripts/systems/tide_director.gd")
 const StormGuard := preload("res://scripts/systems/storm_guard.gd")
 const Seal := preload("res://scripts/systems/seal.gd")
 const Vent := preload("res://scripts/world/vent.gd")
+const StoryDirector := preload("res://scripts/systems/story_director.gd")
+const MondayDirector := preload("res://scripts/systems/monday_director.gd")
 
 
 static func build(main: Node3D, zombie_parent: Node3D) -> void:
@@ -28,6 +30,18 @@ static func build(main: Node3D, zombie_parent: Node3D) -> void:
 		for id in s.STORM_POINTS:
 			if apt.barricades.has(id):
 				guard.attach(apt.barricades[id], id)
+	# The story layer runs everywhere: omens, the wall clock, the phone call.
+	var story := StoryDirector.new()
+	story.name = "StoryDirector"
+	story.apartment = apt
+	story.player = main.player
+	main.add_child(story)
+	if s.MODE == "monday":
+		var monday := MondayDirector.new()
+		monday.name = "MondayDirector"
+		monday.apartment = apt
+		monday.player = main.player
+		main.add_child(monday)
 	for kind in s.DIRECTORS:
 		match kind:
 			"events":

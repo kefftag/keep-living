@@ -181,12 +181,12 @@ func _physics_process(delta: float) -> void:
 	if holding:
 		dir = Vector3.ZERO
 	var sneaking := Input.is_action_pressed("sneak") or _sneak_toggled
-	var speed := SNEAK_SPEED if sneaking else SPEED
+	var speed := (SNEAK_SPEED if sneaking else SPEED) * Game.walk_mult()
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	var moving := dir.length() > 0.1 and is_on_floor()
 	if moving:
-		bob_t += delta * (6.0 if sneaking else 9.0)
+		bob_t += delta * (6.0 if sneaking else 9.0) * Game.walk_mult()
 		step_noise_t += delta
 		if step_noise_t > (0.62 if sneaking else 0.45):
 			step_noise_t = 0.0
@@ -367,12 +367,15 @@ func sleep_on(bed: Node3D) -> void:
 
 
 func _wake() -> void:
+	var was_sleeping := Game.player_sleeping
 	Game.player_sleeping = false
 	head.rotation.x = 0.0
 	head.position.y = EYE_HEIGHT
 	if is_instance_valid(_bed):
 		# Swing your legs out on the room side of the bed.
 		global_position = _bed.to_global(Vector3(_bed.size.x * 0.5 + 0.4, 0.05, 0.5))
+	if was_sleeping and Game.is_alive_phase():
+		Game.woke_up.emit()
 
 
 ## Viewmodel meshes are drawn at arm's length from the camera; their shadows

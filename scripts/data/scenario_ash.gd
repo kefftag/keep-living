@@ -72,8 +72,8 @@ const SEALS := {
 }
 
 # --- Story text ----------------------------------------------------------------
-const INTRO_FIRST := "Tokyo. A third-floor 1LDK, a hundred kilometres downwind of Mount Fuji.\n\nIt's 07:58, and your phone is screaming. The light coming through the curtains is the wrong colour.\n\nStay inside. Keep the air in here clean. Find out what's going on. Keep living."
-const INTRO_AGAIN := "You wake up. 07:58. Your phone is screaming, and the light is brown.\n\nAgain.\n\nYou remember the taste of grit."
+const INTRO_FIRST := "Tokyo. Monday, 28 October. A third-floor 1LDK, a hundred kilometres downwind of Mount Fuji.\n\nIt's 07:58, and your phone is screaming. The light coming through the curtains is the wrong colour.\n\nStay inside. Keep the air in here clean. Find out what's going on. Keep living."
+const INTRO_AGAIN := "You wake up. Monday, 07:58. Your phone is screaming, and the light is brown.\n\nAgain.\n\nMorning number {lives}. You remember the taste of grit."
 const GOAL_TEXT := "Survive %d days. Seal the gaps before the ash gets in, ration masks and clean water, clear the balcony, and keep the front door shut at night.\nThe mountain isn't finished: expect tremors."
 const WAKE_MESSAGE := "Your phone is buzzing on the bedside table. The light outside looks wrong."
 const NIGHT_MESSAGE := "Night falls on day %d. Ash hisses softly against the windows."

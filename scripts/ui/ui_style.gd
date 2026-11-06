@@ -215,12 +215,14 @@ static func tag_box() -> StyleBoxFlat:
 
 ## Full-screen hurt vignette + low-health desaturation (canvas_item, reads the
 ## screen behind it). `hurt` 0..1 is the bite flash, `low` 0..1 how far below
-## 30% health the player is.
+## 30% health the player is, `beat` 0..1 a dark heartbeat pulse at the edges
+## (the final scenario).
 const VIGNETTE_SHADER := """
 shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform float hurt = 0.0;
 uniform float low = 0.0;
+uniform float beat = 0.0;
 uniform vec4 hurt_color : source_color = vec4(0.69, 0.0, 0.05, 1.0);
 
 void fragment() {
@@ -232,6 +234,7 @@ void fragment() {
 	float grey = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(c, vec3(grey), low * 0.8);
 	c *= 1.0 - edge * (0.25 + 0.45 * low) * low;
+	c *= 1.0 - smoothstep(0.22, 0.85, r) * beat * 0.85;
 	float flash = edge * hurt;
 	c = mix(c, hurt_color.rgb, clamp(flash * 0.8 + edge * low * 0.18, 0.0, 0.85));
 	COLOR = vec4(c, 1.0);
@@ -404,6 +407,50 @@ static func style_slider(s: HSlider) -> void:
 	var tex := ImageTexture.create_from_image(img)
 	s.add_theme_icon_override("grabber", tex)
 	s.add_theme_icon_override("grabber_highlight", tex)
+
+
+# --- Found objects (memory popups) -------------------------------------------------
+
+const DOC_PAPER := Color("#F3EEE1")       # a printed document, a little yellowed
+const DOC_EDGE := Color("#D8D0BC")
+const NOTE_PAPER := Color("#FBF6D9")      # a scrap of lined notepaper
+const NOTE_LINE := Color(0.45, 0.6, 0.85, 0.28)
+const NOTE_INK := Color("#1F3A78")        # blue ballpoint
+const MEMORY_RED := Color("#B3122A")      # the memory header block
+
+
+## A sheet of paper for a found document, or a lined note in your own hand.
+static func paper_box(handwriting: bool) -> StyleBoxFlat:
+	var s := box(NOTE_PAPER if handwriting else DOC_PAPER, Color(0, 0, 0, 0), 0, 26)
+	s.content_margin_top = 22
+	s.content_margin_bottom = 24
+	s.set_border_width_all(1)
+	s.border_color = DOC_EDGE
+	s.set_corner_radius_all(1)
+	s.shadow_color = Color(0, 0, 0, 0.28)
+	s.shadow_size = 8
+	s.shadow_offset = Vector2(2, 4)
+	return s
+
+
+## Your handwriting: BIZ UD regular, slanted like quick ballpoint (there is no
+## handwriting face in the game, so a faux italic stands in for one).
+static func hand_font() -> Font:
+	if _hand_font == null:
+		var v := FontVariation.new()
+		v.base_font = font(FONT_UI)
+		v.variation_transform = Transform2D(Vector2(1, 0.22), Vector2(0, 1), Vector2.ZERO)  # the documented faux-italic slant
+		v.spacing_glyph = 1
+		_hand_font = v
+	return _hand_font
+
+
+static var _hand_font: Font
+
+
+## A printed document: BIZ UD regular (no Mincho face ships with the game).
+static func doc_font() -> Font:
+	return font(FONT_UI)
 
 
 static func hex(c: Color) -> String:
