@@ -4,7 +4,7 @@ extends CharacterBody3D
 
 const Props := preload("res://scripts/world/props.gd")
 ## assets/models/<name>.glb, one picked per zombie. Rigged ones carry walk / idle / attack clips.
-const MODEL_VARIANTS := ["zombie", "zombie_02"]
+const MODEL_VARIANTS := ["zombie", "zombie_02", "zombie_03"]
 
 enum State { APPROACH, BASH, HUNT, DEAD }
 
@@ -93,7 +93,10 @@ func _ready() -> void:
 	for side in [-1, 1]:
 		if head:
 			var eye := Props.box(Vector3(0.018, 0.008, 0.008), Color(0.95, 0.92, 0.75), Vector3.ZERO, 1.6)
-			eye.transform = head_from_body * Transform3D(Basis(), Vector3(0.032 * side, 1.59, 0.095))
+			# Eyes sit ~7 cm above the head bone's base and ~9.5 cm forward,
+			# so they follow models of any height.
+			var head_base: Vector3 = head_from_body.affine_inverse().origin
+			eye.transform = head_from_body * Transform3D(Basis(), Vector3(0.032 * side, head_base.y + 0.07, head_base.z + 0.095))
 			head.add_child(eye)
 		else:
 			var eye := Props.box(Vector3(0.035, 0.02, 0.02), Color(0.95, 0.92, 0.75), Vector3(0.045 * side, 1.47, 0.16), 2.5)
