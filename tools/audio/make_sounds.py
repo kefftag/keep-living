@@ -490,7 +490,89 @@ def tide():
     save("boat", (engine + slap) * np.minimum(1, tt / 2.5) * np.minimum(1, (d - tt) / 0.5), 0.8)
 
 
-GROUPS = (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc, ash, tide)
+def story():
+    """The story layer: the ambulance siren omen, Monday's birds and distant train, the defibrillator."""
+    r = np.random.default_rng(758)  # own generator: regenerating only these keeps the rest identical
+
+    def rnoise(dur):
+        return r.standard_normal(int(dur * SR))
+
+    # Japanese ambulance siren (ピーポー): two tones, ~960 Hz and ~770 Hz,
+    # 0.65 s each, from an electronic driver (odd harmonics, a bit nasal). It
+    # comes up the street from far away (quiet, dull, pitched up by the
+    # approach), slows, then stops dead outside, mid-ポー.
+    d = 9.0
+    tt = t(d)
+    half = 0.65
+    tone = np.where((tt // half) % 2 == 0, 960.0, 770.0)
+    tone = lowpass(tone - 865.0, 18.0) + 865.0  # quick but click-free switch between the tones
+    approach = np.clip(tt / 7.6, 0, 1)
+    doppler = 1.0 + 0.035 * (1 - approach) ** 1.5 - 0.012 * np.clip((tt - 7.2) / 0.6, 0, 1)
+    ph = 2 * np.pi * np.cumsum(tone * doppler) / SR
+    wave = sum(np.sin(k * ph) / k ** 1.3 for k in (1, 3, 5, 7))
+    loud = 0.05 + 0.95 * approach ** 2.2
+    # Far away the street eats the top end; close up it's bright.
+    far = lowpass(wave, 1400) * (1 - approach) + wave * approach
+    y = far * loud
+    stop = int(8.05 * SR)  # the driver cuts it as the ambulance pulls up
+    y[stop:] *= np.exp(-np.arange(len(y) - stop) / SR / 0.025)
+    echo = np.zeros_like(y)  # slap-back off the buildings across the street
+    k = int(0.13 * SR)
+    echo[k:] = y[:-k] * 0.35
+    k2 = int(0.31 * SR)
+    echo[k2:] += y[:-k2] * 0.18
+    y = y + lowpass(echo, 3000)
+    y += lowpass(rnoise(d), 300) * 0.04 * loud  # engine and tyres under it
+    save("siren", y * np.minimum(1, tt / 0.3), 0.85)
+
+    # Morning birds (sparrows, チュンチュン): short bright chirps in little
+    # bursts, a softer pair further off, over a faint city wash. Loops.
+    d = 12.0
+    y = bandpass(rnoise(d), 200, 1500) * 0.015
+    at = 0.2
+    while at < d - 0.5:
+        n_chirps = int(r.integers(2, 6))
+        dist = r.uniform(0.25, 1.0)
+        for c in range(n_chirps):
+            cd = r.uniform(0.04, 0.09)
+            ct = t(cd)
+            f0, f1 = r.uniform(3600, 5200), r.uniform(2800, 4200)
+            f = f0 + (f1 - f0) * (ct / cd) + 300 * np.sin(2 * np.pi * 90 * ct)
+            ch = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * ct / cd) ** 2
+            if dist < 0.6:
+                ch = lowpass(ch, 3500)
+            place(y, ch * dist * 0.5, at)
+            at += cd + r.uniform(0.05, 0.12)
+        at += r.uniform(0.6, 2.2)
+    save("birds", fade_loop(y, 0.8), 0.45)
+
+    # A Tōzai line train in the distance: a long rumble that swells and fades,
+    # the rail joints (ガタンゴトン) under it, a faint flange squeal.
+    d = 9.0
+    tt = t(d)
+    swell = np.exp(-0.5 * ((tt - 4.5) / 1.9) ** 2)
+    rumble = lowpass(rnoise(d), 180) * 1.2 + bandpass(rnoise(d), 180, 900) * 0.3
+    joints = np.zeros(len(tt))
+    at = 0.5
+    while at < d - 0.3:
+        for off in (0.0, 0.14):
+            place(joints, lowpass(rnoise(0.06), 400) * env_exp(int(0.06 * SR), 0.015), at + off)
+        at += r.uniform(0.62, 0.7)
+    squeal = np.sin(2 * np.pi * (2400 + 40 * np.sin(2 * np.pi * 0.7 * tt)) * tt) * 0.02 * np.exp(-0.5 * ((tt - 5.5) / 0.8) ** 2)
+    save("train_far", lowpass((rumble + joints * 1.5) * swell + squeal, 1800), 0.6)
+
+    # Defibrillator: the charge whine climbing, then the thump.
+    d = 1.8
+    tt = t(d)
+    fw = 1800 + 2600 * np.clip(tt / 1.2, 0, 1) ** 1.5
+    whine = np.sin(2 * np.pi * np.cumsum(fw) / SR) * 0.12 * (tt < 1.25)
+    thump = np.zeros(len(tt))
+    place(thump, lowpass(rnoise(0.3), 150) * env_exp(int(0.3 * SR), 0.08) * 1.5, 1.28)
+    place(thump, resonator(0.4, [55, 110], [0.12, 0.06], [1.0, 0.4]), 1.28)
+    save("defib", whine + thump, 0.85)
+
+
+GROUPS = (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc, ash, tide, story)
 
 
 def main():
