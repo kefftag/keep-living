@@ -27,6 +27,7 @@ const Hazard := preload("res://scripts/world/furniture_hazard.gd")
 const Utility := preload("res://scripts/world/utilities.gd")
 const Barricade := preload("res://scripts/world/barricade_point.gd")
 const Door := preload("res://scripts/world/door.gd")
+const Decor := preload("res://scripts/world/decor.gd")
 
 const M := 0.91           # one module (半間)
 const CEIL := 2.4
@@ -81,6 +82,7 @@ func _ready() -> void:
 	_build_doors()
 	_build_barricades()
 	_build_furniture()
+	add_child(Decor.new())  # lived-in clutter, no collision
 	_build_outside()
 	_build_lights()
 	_build_skyline()
