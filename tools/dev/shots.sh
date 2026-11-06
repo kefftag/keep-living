@@ -14,6 +14,6 @@ mkdir -p "$OUT"
 LOG="$OUT/godot.log"
 rm -f "$LOG"
 # -g: don't bring to front, -W: wait until it quits, -n: separate instance.
-open -g -W -n -a "$APP" --args --path "$PROJ" --log-file "$LOG" -- --smoke-test --shots="$OUT"
+open -g -W -n -a "$APP" --args --path "$PROJ" --audio-driver Dummy --log-file "$LOG" -- --smoke-test --shots="$OUT"
 grep -E "^\s*(ok|FAIL|shot)|SMOKE" "$LOG"
 grep -q "SMOKE OK" "$LOG"
