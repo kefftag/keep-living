@@ -7,6 +7,7 @@ extends RefCounted
 const UI := preload("res://scripts/ui/ui_style.gd")
 const Scenarios := preload("res://scripts/data/scenarios.gd")
 const Perks := preload("res://scripts/data/perks.gd")
+const Story := preload("res://scripts/data/story.gd")
 
 ## Where the camera sits behind the title: the LDK, looking at the balcony glass.
 const TITLE_POS := Vector3(5.7, 0.05, 3.25)
@@ -40,24 +41,11 @@ static func show_title(hud) -> void:
 	hud.root.add_child(root)
 	hud.title_root = root
 
+	if Meta.true_ending:
+		# After the true ending the flat is lit by plain morning sun.
+		root.add_child(_sun_wash())
 	# Dark wash on the left so the type reads; the apartment shows on the right.
-	var g := Gradient.new()
-	g.set_color(0, Color(0.02, 0.03, 0.06, 0.94))
-	g.set_color(1, Color(0.02, 0.03, 0.06, 0.0))
-	g.add_point(0.55, Color(0.02, 0.03, 0.06, 0.78))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.fill_from = Vector2(0, 0)
-	gt.fill_to = Vector2(1, 0)
-	gt.width = 256
-	gt.height = 4
-	var wash := TextureRect.new()
-	wash.texture = gt
-	wash.stretch_mode = TextureRect.STRETCH_SCALE
-	wash.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-	wash.offset_right = 1150
-	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(wash)
+	root.add_child(side_wash())
 	# A black poster band along the bottom (the Metro manner-poster footer).
 	var band := PanelContainer.new()
 	band.add_theme_stylebox_override("panel", UI.band_box(14))
@@ -87,6 +75,12 @@ static func show_title(hud) -> void:
 	col.add_child(en)
 	var tag = hud._label("Survive the end of the world from inside your Tokyo apartment.", 22, UI.PAPER)
 	col.add_child(tag)
+	if Scenarios.monday_unlocked() and not Meta.true_ending:
+		# The final scenario has opened (docs/STORY.md): a quiet nudge.
+		var nudge = hud._label(Scenarios.MONDAY.TAGLINE, 24, UI.SIGN_YELLOW)
+		nudge.add_theme_font_override("font", UI.hand_font())
+		col.add_child(hud._spacer(0))
+		col.add_child(nudge)
 
 	var menu := VBoxContainer.new()
 	menu.position = Vector2(88, 410)
@@ -120,8 +114,12 @@ static func show_title(hud) -> void:
 	for side in ["left", "right", "top", "bottom"]:
 		body.add_theme_constant_override("margin_" + side, 14)
 	pv.add_child(body)
-	var bl = hud._label("%s\nBest: day %d   Clues %d / %d" % [s.TAGLINE, Meta.best_day_in(s.ID),
-		Meta.known_clue_list(s.ID).size(), s.CLUES.size()], UI.FS_HUD, UI.INK)
+	var plate_text := "%s\nBest: day %d   Clues %d / %d" % [s.TAGLINE, Meta.best_day_in(s.ID),
+		Meta.known_clue_list(s.ID).size(), s.CLUES.size()]
+	if s == Scenarios.MONDAY:
+		plate_text = "%s\nMemories %d / %d%s" % [s.TAGLINE, Meta.memories.size(), Story.FRAGMENTS.size(),
+			"   完  Finished" if Meta.true_ending else ""]
+	var bl = hud._label(plate_text, UI.FS_HUD, UI.INK)
 	bl.add_theme_constant_override("outline_size", 0)
 	bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bl.custom_minimum_size = Vector2(330, 0)
@@ -146,10 +144,54 @@ static func _menu_button(hud, text: String, cb: Callable, primary := false) -> B
 	return b
 
 
+## Dark wash on the left so type reads over the flat (title, credits roll).
+static func side_wash() -> TextureRect:
+	var g := Gradient.new()
+	g.set_color(0, Color(0.02, 0.03, 0.06, 0.94))
+	g.set_color(1, Color(0.02, 0.03, 0.06, 0.0))
+	g.add_point(0.55, Color(0.02, 0.03, 0.06, 0.78))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0, 0)
+	gt.fill_to = Vector2(1, 0)
+	gt.width = 256
+	gt.height = 4
+	var wash := TextureRect.new()
+	wash.texture = gt
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	wash.offset_right = 1150
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return wash
+
+
+## Warm, flat morning light over the right of the title once Monday is finished.
+static func _sun_wash() -> TextureRect:
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.9, 0.7, 0.0))
+	g.set_color(1, Color(1.0, 0.92, 0.74, 0.34))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0.3, 1.0)
+	gt.fill_to = Vector2(1.0, 0.0)
+	gt.width = 128
+	gt.height = 128
+	var wash := TextureRect.new()
+	wash.texture = gt
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return wash
+
+
 static func hide_title(hud) -> void:
 	if is_instance_valid(hud.title_root):
 		hud.title_root.queue_free()
 	hud.title_root = null
+
+
+static func pose_title_camera(hud) -> void:
+	_pose_camera(hud)
 
 
 static func _pose_camera(hud) -> void:
@@ -182,9 +224,13 @@ static func show_scenarios(hud) -> void:
 	hud.overlay_box.add_child(hud._label("Each scenario keeps its own clues, theory and records. Echoes carry over between all of them.", UI.FS_NOTE, hud.oc_dim))
 	var first_play: Button = null
 	for s in Scenarios.ALL:
-		var reason := Scenarios.lock_reason(s.UNLOCK_AFTER_WIN)
+		var reason := Scenarios.lock_reason_for(s)
 		var rec := "Lives %d   ·   Best day %d   ·   Rescues %d   ·   Clues %d / %d" % [Meta.runs_in(s.ID), Meta.best_day_in(s.ID),
 			Meta.wins_in(s.ID), Meta.known_clue_list(s.ID).size(), s.CLUES.size()]
+		if s == Scenarios.MONDAY:
+			if reason != "":
+				continue  # the final scenario stays a secret until it opens
+			rec = "Memories %d / %d%s" % [Meta.memories.size(), Story.FRAGMENTS.size(), "   ·   完  Finished" if Meta.true_ending else ""]
 		var sid: String = s.ID
 		var b := _card(hud, s.TITLE_JP, s.TITLE, s.TAGLINE, s.BLURB, rec, reason, func(): hud._title_play(sid), s == Game.scenario)
 		if b and first_play == null:
@@ -351,6 +397,14 @@ static func show_credits(hud, back: Callable) -> void:
 	hud.set_meta("settings_back", back)
 	var box = hud.overlay_box
 	box.add_child(hud._bilingual("生きていく", "KEEP LIVING  v%s" % ProjectSettings.get_setting("application/config/version", "0.1"), 34, UI.FS_NOTE, hud.oc_accent, hud.oc_dim))
+	credits_content(hud, box)
+	box.add_child(hud._button("戻る  Back  [%s]" % Game.glyph("back"), back))
+	hud._fit_overlay()
+
+
+## The credits text (also rolled after the true ending). Uses the hud's current
+## overlay colours (hud.oc_*).
+static func credits_content(hud, box: Control) -> void:
 	box.add_child(hud._text("A roguelite about surviving the end of the world from inside a Tokyo 1LDK. Design, code, models and sounds made for this game; all sound effects are synthesised in-house.", UI.FS_BODY))
 	box.add_child(hud._section("書体", "Fonts (SIL Open Font License 1.1)"))
 	for line in [
@@ -366,5 +420,3 @@ static func show_credits(hud, back: Callable) -> void:
 	box.add_child(hud._text("Models: " + ", ".join(MODEL_CREDITS) + ".", UI.FS_NOTE, hud.oc_dim))
 	box.add_child(hud._section("エンジン", "Engine"))
 	box.add_child(hud._text("Made with the Godot Engine (godotengine.org), MIT licence. © Juan Linietsky, Ariel Manzur and contributors.", UI.FS_BODY))
-	box.add_child(hud._button("戻る  Back  [%s]" % Game.glyph("back"), back))
-	hud._fit_overlay()

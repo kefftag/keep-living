@@ -64,7 +64,7 @@ func get_prompt(alt: bool) -> String:
 				return "Fill the bathtub"
 			return ""
 		"bed":
-			if alt or Game.phase != Game.Phase.DAY or Game.minutes >= Game.REST_UNTIL - 30:
+			if alt or Game.is_monday() or Game.phase != Game.Phase.DAY or Game.minutes >= Game.REST_UNTIL - 30:
 				return ""
 			return "Rest until evening"
 	return ""
