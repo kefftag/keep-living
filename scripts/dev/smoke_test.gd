@@ -86,15 +86,30 @@ func _tour(player, apt) -> void:
 	await _wait(0.6)
 
 
+## Which scene load this is: 0 title + Outbreak, 1 Outbreak again, 2 Ash
+## (to the evacuation), 3 Ash again (to a death). Static, so it survives the
+## scene reloads between lives.
+static var stage := -1
+
+
 func _run() -> void:
-	if Meta.deaths > 0:
-		_second_life()
-		return
+	stage += 1
+	match stage:
+		1:
+			_second_life()
+			return
+		2:
+			_ash_life()
+			return
+		3:
+			_ash_second_life()
+			return
 	print("SMOKE: start (runs so far: %d)" % Meta.runs)
 	var hud = main.hud
 	var player = main.player
 	var apt = main.apartment
 	await _wait(0.5)
+	await _front_end(hud)
 	await _shot("01_intro")
 	_check(hud.overlay_kind == "intro", "intro card is shown")
 	hud._start_run()
@@ -303,9 +318,215 @@ func _second_life() -> void:
 	_check(Game.day == 1 and Game.health == Game.max_health, "world and stats reset for the new life")
 	_check(Meta.runs == 2, "second run counted")
 	var seen := []
-	Game.clue_found.connect(func(id, is_new): seen.append(is_new))
+	var on_clue := func(_id, is_new): seen.append(is_new)
+	Game.clue_found.connect(on_clue)
 	main.apartment.nav_region.get_node("phone").perform(false)
+	Game.clue_found.disconnect(on_clue)
 	_check(seen == [false], "re-reading a known clue isn't treated as new")
+	_check(Meta.best_day_in("zombie") >= 1 and Meta.runs_in("zombie") == 2, "Outbreak keeps its own record (best day %d)" % Meta.best_day_in("zombie"))
+	if _failed:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	hud._close()
+	print("SMOKE: switching to Ash...")
+	hud._title_play("ash")  # a different scenario: reloads into its intro
+
+
+# --- Front end -------------------------------------------------------------------
+
+func _front_end(hud) -> void:
+	_check(hud.overlay_kind == "title", "title screen is shown at boot")
+	_check(get_tree().paused, "the world waits behind the title")
+	await _shot("00_title")
+	hud._show_scenarios()
+	await _wait(0.3)
+	_check(hud.overlay_kind == "scenarios", "scenario select opens")
+	await _shot("00b_scenarios")
+	hud._show_settings(hud._show_title)
+	await _wait(0.3)
+	_check(hud.overlay_kind == "settings", "settings open")
+	await _shot("00c_settings")
+	var slider: HSlider = hud.overlay_box.find_child("slider_mouse_sensitivity", true, false)
+	_check(slider != null, "settings have a mouse sensitivity slider")
+	if slider:
+		slider.value = 1.5
+	_check(is_equal_approx(Settings.mouse_factor(), 1.5), "moving the slider changes the setting")
+	var cfg := ConfigFile.new()
+	_check(cfg.load(Settings.path) == OK and is_equal_approx(float(cfg.get_value("settings", "mouse_sensitivity", 0.0)), 1.5), "settings are saved to %s" % Settings.path)
+	var toggle: Button = hud.overlay_box.find_child("toggle_reduce_shake", true, false)
+	if toggle:
+		toggle.button_pressed = true
+	_check(is_equal_approx(Settings.shake_scale(), 0.25), "reduce camera shake toggles")
+	Settings.reset_defaults()
+	_check(is_equal_approx(Settings.mouse_factor(), 1.0) and Settings.shake_scale() == 1.0, "settings reset to defaults")
+	hud._show_credits(hud._show_title)
+	await _wait(0.3)
+	_check(hud.overlay_kind == "credits", "credits open")
+	await _shot("00d_credits")
+	hud._show_title()
+	await _wait(0.2)
+	hud._title_play("zombie")
+	await _wait(0.3)
+
+
+# --- Ash ---------------------------------------------------------------------------
+
+func _ash_life() -> void:
+	print("SMOKE: Ash")
+	var hud = main.hud
+	var player = main.player
+	var apt = main.apartment
+	await _wait(0.5)
+	_check(Game.scenario.ID == "ash", "Ash is the active scenario")
+	_check(hud.overlay_kind == "intro", "Ash opens on its intro card")
+	await _shot("20_ash_intro")
+	hud._start_run()
+	await _wait(0.3)
+	_check(Game.phase == Game.Phase.DAY, "Ash run begins")
+	_check(main.get_node_or_null("NightDirector") == null and main.get_node_or_null("AshDirector") != null
+		and main.get_node_or_null("LooterDirector") != null, "Ash runs its own directors, not the night siege")
+	var ash = main.get_node("AshDirector")
+	var seal = ash.seal
+	_check(seal.levels.size() == 7 and apt.get_node_or_null("vent_ldk") != null, "7 seal points, vents on the walls")
+	_check(apt.barricades["front_door"].mode_handler == seal, "entrances became seal points")
+	var types := Game.scheduled_events.map(func(e): return e["type"])
+	_check("ash_begins" in types and "quake" in types and "water_taint" in types, "eruption timeline: ash, tremors, tainted water")
+	Game.gas_valve_open = false  # no gas leaks in the scripted run
+	_pose(player, Vector3(3.2, 0.05, 5.0), Vector3(3.2, 1.4, 7.0))
+
+	# Clues come from the same sources with Ash's content.
+	apt.nav_region.get_node("phone").perform(false)
+	_check(Meta.knows_clue("ash", "jalert") and not Meta.knows_clue("ash", "radio_sound"), "phone gives Ash's J-ALERT")
+	await _wait(0.2)
+	await _shot("20b_ash_clue")
+	hud._close()
+	apt.nav_region.get_node("tv").perform(false)
+	hud._close()
+	_check(Game.has_insight("ash_forecast"), "the NHK broadcast gives the ash forecast insight")
+
+	# The plume arrives; unsealed, ash gets in.
+	Game.advance_minutes(10 * 60 + 1 - Game.minutes)
+	await _wait(0.2)
+	_check(Game.ash_falling, "ash begins to fall at 10:00")
+	var leak0: float = seal.total_leak()
+	Game.advance_minutes(90)
+	var dust1: float = Game.dust
+	_check(dust1 > 5.0, "unsealed, ash gets in (air %d)" % int(Game.air_quality()))
+	_pose(player, Vector3(4.55, 0.05, 2.4), Vector3(4.2, 1.1, -2.0))
+	await _wait(0.4)
+	await _shot("21_ash_day")
+
+	# Seal everything twice: tape, then sheeting.
+	Game.materials += 30
+	for id in seal.nodes:
+		seal.nodes[id].perform(false)
+		seal.nodes[id].perform(false)
+	_check(seal.total_leak() < leak0 * 0.15, "sealing cuts the leak (%.1f -> %.1f)" % [leak0, seal.total_leak()])
+	Game.advance_minutes(120)
+	_check(Game.dust < dust1, "with the gaps sealed the air clears (dust %d -> %d)" % [int(dust1), int(Game.dust)])
+	_pose(player, Vector3(2.0, 0.05, 2.2), Vector3(1.2, 1.3, 0.0))
+	await _wait(0.3)
+	await _shot("23_ash_sealed_window")
+	_pose(player, Vector3(5.2, 0.05, 2.0), Vector3(6.27, 2.07, 1.3))
+	await _wait(0.3)
+	_check(player.focus == apt.get_node("vent_ldk"), "looking at the LDK vent focuses it (focus: %s)" % [player.focus.name if player.focus else "none"])
+	await _shot("23b_ash_vent")
+
+	# A tremor peels tape.
+	var before: int = seal.levels.values().reduce(func(a, b): return a + b)
+	seal.peel(Game.rng, 1)
+	_check(seal.levels.values().reduce(func(a, b): return a + b) == before - 1, "a tremor peels tape off a seal")
+
+	# Masks.
+	Game.masks = 1
+	Game.wear_mask()
+	_check(Game.masks == 0 and Game.mask_left > 300.0, "a mask goes on and lasts hours")
+
+	# Day 2: tap water turns, then the power goes.
+	Game.heal(Game.max_health)
+	Game.hunger = 100.0
+	Game.thirst = 100.0
+	Game.advance_minutes(Game.NIGHT_START - Game.minutes + 1)
+	await _wait(0.2)
+	_check(Game.phase == Game.Phase.NIGHT, "night falls in Ash too")
+	Game.advance_minutes(Game.NIGHT_END - Game.minutes + 1)
+	await _wait(0.3)
+	_check(Game.day == 2 and not Game.water_running and Game.water_note != "", "tap water is contaminated on day 2")
+	_check(apt.nav_region.get_node("tap").get_prompt(false) == "", "the tainted tap can't fill bottles")
+	Game.advance_minutes(16 * 60 - Game.minutes)
+	await _wait(0.2)
+	_check(not Game.power_on, "the power fails on day 2")
+
+	# Looters at the front door.
+	Game.heal(Game.max_health)
+	Game.food = 4
+	Game.water = 4
+	var door = apt.barricades["front_door"]
+	var looters = main.get_node("LooterDirector")
+	looters.begin_attempt()
+	_check(Game.looters_active, "looters try the front door")
+	_check(door.get_prompt(true) != "", "you can shout through the door at them")
+	var hp0: float = door.hp
+	Engine.time_scale = 4.0
+	await _wait(8.0)
+	Engine.time_scale = 1.0
+	_check(door.hp < hp0, "the looters damage the door (%d -> %d)" % [int(hp0), int(door.hp)])
+	_pose(player, Vector3(3.25, 0.05, 5.4), Vector3(3.27, 1.1, 7.3))
+	await _wait(0.3)
+	await _shot("22_ash_looters")
+	var hp_before: float = Game.health
+	door.take_damage(99999.0)
+	await _wait(0.2)
+	_check(not Game.looters_active and Game.food < 4 and Game.health < hp_before, "a forced door costs supplies and health")
+	_check(seal.factor("front_door") == Game.scenario.BROKEN_FACTOR, "a forced door lets the ash pour in")
+	door.perform(false)
+	_check(not door.broken, "the broken door can be boarded over")
+
+	# The balcony: shovel it, then let it collapse.
+	var bal = apt.barricades["balcony_door"]
+	Game.balcony_load = 50.0
+	bal.perform(true)
+	_check(Game.balcony_load == 0.0, "shovelling clears the balcony")
+	Game.balcony_load = 99.95
+	Game.advance_minutes(10)
+	_check(bal.broken, "wet ash brings the balcony door down at 100%")
+
+	# Rescue: the evacuation bus at dawn after night 5.
+	Game.heal(Game.max_health)
+	Game.day = Game.scenario.NIGHTS_TO_SURVIVE
+	Game.phase = Game.Phase.NIGHT
+	Game.minutes = Game.NIGHT_END - 0.5
+	await _wait(2.0)
+	_check(Game.phase == Game.Phase.WON and hud.overlay_kind == "end", "the evacuation bus comes at dawn")
+	_check(Meta.wins_in("ash") == 1 and Meta.wins_in("zombie") == 0, "the rescue is recorded for Ash only")
+	_check(Meta.best_day_in("ash") == 6, "Ash's best day is tracked")
+	await _shot("24_ash_evacuated")
+	if _failed:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	hud._restart()
+
+
+func _ash_second_life() -> void:
+	print("SMOKE: Ash, second life")
+	var hud = main.hud
+	await _wait(0.5)
+	_check(Game.scenario.ID == "ash" and hud.overlay_kind == "intro", "the next life stays in Ash")
+	_check(Game.has_insight("ash_forecast"), "Ash insights are remembered")
+	hud._start_run()
+	await _wait(0.3)
+	_check(Meta.runs_in("ash") == 2, "Ash lives are counted separately")
+	Game.ash_falling = true
+	Game.dust = 100.0
+	Game.health = 3.0
+	Game.advance_minutes(60)
+	_check(Game.phase == Game.Phase.DEAD and "Ash in the lungs" in Game.death_cause, "breathing ash kills (%s)" % Game.death_cause)
+	await _wait(2.0)
+	_check(hud.overlay_kind == "end", "Ash death screen is shown")
+	_check("lungs" in str(Meta.last_death_in("ash").get("cause", "")), "the death is recorded for Ash")
+	await _shot("25_ash_death")
 	print("SMOKE OK" if not _failed else "SMOKE FAILED")
 	await _quit(1 if _failed else 0)
 

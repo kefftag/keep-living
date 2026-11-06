@@ -11,6 +11,9 @@ var _streams := {}     # name -> Array[AudioStream]
 var _ambience: Array = []  # [day player, night player]
 var _heartbeat: AudioStreamPlayer
 
+## Every one-shot request (the HUD turns some into subtitles).
+signal played(sound: String, pos: Variant)
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -88,6 +91,7 @@ func has(sound: String) -> bool:
 
 ## One-shot at a world position (or non-positional if pos is null).
 func play(sound: String, pos: Variant = null, volume_db: float = 0.0, pitch_jitter: float = 0.06, max_dist: float = 25.0) -> void:
+	played.emit(sound, pos)  # for subtitles, even when the clip is missing
 	var stream := _pick(sound)
 	if stream == null or not is_inside_tree():
 		return

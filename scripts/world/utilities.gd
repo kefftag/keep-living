@@ -67,7 +67,7 @@ func get_status() -> String:
 			return "(gas on)" if Game.gas_valve_open else "(gas off)"
 		"tap":
 			if not Game.water_running:
-				return "(dry)"
+				return "(%s)" % (Game.water_note if Game.water_note != "" else "dry")
 			if _tap_uses() >= 2:
 				return "(pressure too low, try tomorrow)"
 		"bathtub":
