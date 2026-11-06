@@ -6,6 +6,13 @@ extends "res://scripts/world/interactable.gd"
 var kind := ""  # stove | tap | bathtub | bed
 var water_plane: MeshInstance3D
 var _hiss: AudioStreamPlayer3D
+## A scenario can take a fixture over while handles(self, alt) is true (Tide:
+## boiling the brown tap water). Gets the interactable calls with this node first.
+var mode_handler: Object = null
+
+
+func _mode(alt: bool) -> bool:
+	return mode_handler != null and mode_handler.handles(self, alt)
 
 
 func _process(_delta: float) -> void:
@@ -18,6 +25,8 @@ func _process(_delta: float) -> void:
 
 
 func get_hold_sound(_alt: bool) -> String:
+	if _mode(_alt):
+		return mode_handler.get_hold_sound(self, _alt)
 	if kind == "tap" or (kind == "bathtub" and Game.bathtub_water <= 0):
 		return "water_pour"
 	return ""
@@ -33,6 +42,8 @@ func _build() -> void:
 
 
 func get_prompt(alt: bool) -> String:
+	if _mode(alt):
+		return mode_handler.get_prompt(self, alt)
 	match kind:
 		"stove":
 			if alt:
@@ -60,6 +71,8 @@ func get_prompt(alt: bool) -> String:
 
 
 func get_status() -> String:
+	if _mode(false):
+		return mode_handler.get_status(self)
 	match kind:
 		"stove":
 			if Game.gas_leaking:
@@ -86,6 +99,8 @@ func get_flag() -> String:
 
 
 func get_duration(alt: bool) -> float:
+	if _mode(alt):
+		return mode_handler.get_duration(self, alt)
 	match kind:
 		"stove":
 			return 4.0 if alt else 1.5
@@ -99,6 +114,8 @@ func get_duration(alt: bool) -> float:
 
 
 func get_noise(alt: bool) -> float:
+	if _mode(alt):
+		return mode_handler.get_noise(self, alt)
 	if kind == "stove" and alt:
 		return 1.5
 	if kind == "tap" or (kind == "bathtub" and Game.bathtub_water <= 0):
@@ -107,6 +124,9 @@ func get_noise(alt: bool) -> float:
 
 
 func perform(alt: bool) -> void:
+	if _mode(alt):
+		mode_handler.perform(self, alt)
+		return
 	match kind:
 		"stove":
 			if alt:

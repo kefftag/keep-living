@@ -61,8 +61,10 @@ var sky_mat: ShaderMaterial
 var cam_attr: CameraAttributesPractical
 var _last_key := Vector4(-1, -1, -1, -1)
 var _last_haze := -1.0
+var _last_storm := -1.0
 var _last_minutes := 0.0
 var haze := 0.0  # 0 clear .. 1 thick volcanic ash overhead (Ash scenario); eased
+var storm := 0.0  # 0 clear .. 1 black typhoon overcast (Tide scenario); eased
 
 
 ## How much ash hangs in the sky right now (Ash scenario), 0..1.
@@ -71,6 +73,14 @@ static func ash_haze_target() -> float:
 		return 0.0
 	var rate: float = Game.ash_forecast[clampi(Game.day - 1, 0, Game.ash_forecast.size() - 1)]
 	return clampf(0.45 + rate * 0.45, 0.0, 0.95)
+
+
+## How dark the typhoon sky is right now (Tide scenario), 0..1: a low grey
+## overcast for the whole flood, near-black cloud at the height of the wind.
+static func storm_target() -> float:
+	if not Game.is_storm_mode():
+		return 0.0
+	return clampf(0.35 + Game.storm_level * 0.65, 0.0, 1.0)
 
 
 func _ready() -> void:
@@ -184,6 +194,7 @@ func _process(delta: float) -> void:
 	var dm: float = clampf(Game.minutes - _last_minutes, 0.0, 600.0)
 	_last_minutes = Game.minutes
 	haze = move_toward(haze, ash_haze_target(), dm * 0.035 + delta * 0.02)
+	storm = move_toward(storm, storm_target(), dm * 0.02 + delta * 0.02)
 	update_daylight()
 
 
@@ -255,6 +266,16 @@ func update_daylight() -> void:
 		color = color.lerp(Color(1.0, 0.62, 0.38), haze)
 		energy *= lerpf(1.0, 0.12, haze)
 		sky_e *= lerpf(1.0, 0.35, haze)
+	# Typhoon: a cold, flat light under thick cloud, almost no direct sun.
+	if storm > 0.001:
+		color = color.lerp(Color(0.72, 0.78, 0.86), storm)
+		energy *= lerpf(1.0, 0.06, storm)
+		sky_e *= lerpf(1.0, 0.12, storm)
+	# The eye can't fully adapt to it: a storm day stays gloomy indoors.
+	cam_attr.auto_exposure_max_sensitivity = lerpf(1600.0, 550.0, storm)
+	# Auto exposure would lift a dark sky straight back to normal outdoors:
+	# pull the final exposure down under the clouds.
+	env.tonemap_exposure = lerpf(1.0, 0.5, storm)
 	sun.light_color = color
 	sun.light_energy = energy
 	sun.visible = energy > 0.001
@@ -263,11 +284,13 @@ func update_daylight() -> void:
 
 	# Only touch the sky when it changed visibly (each change re-filters radiance).
 	var key := Vector4(snappedf(day_w, 0.02), snappedf(dusk_w, 0.02), snappedf(sky_e, 0.01), snappedf(a.x, 1.0))
-	if key != _last_key or absf(haze - _last_haze) > 0.02:
+	if key != _last_key or absf(haze - _last_haze) > 0.02 or absf(storm - _last_storm) > 0.02:
 		_last_key = key
 		_last_haze = haze
-		sky_mat.set_shader_parameter("tint", Vector3(1, 1, 1).lerp(Vector3(0.78, 0.6, 0.44), haze))
-		sky_mat.set_shader_parameter("saturation", lerpf(0.7, 0.35, haze))
+		_last_storm = storm
+		var tint := Vector3(1, 1, 1).lerp(Vector3(0.78, 0.6, 0.44), haze).lerp(Vector3(0.42, 0.47, 0.54), storm)
+		sky_mat.set_shader_parameter("tint", tint)
+		sky_mat.set_shader_parameter("saturation", lerpf(0.7, 0.35, haze) * lerpf(1.0, 0.2, storm))
 		var sun_u := _u_of(_dir(a.x, 0.0))
 		sky_mat.set_shader_parameter("weights", Vector3(day_w, dusk_w, night_w))
 		sky_mat.set_shader_parameter("rotations", Vector3(DAY_SUN_U - sun_u, DUSK_SUN_U - sun_u, NIGHT_GLOW_U - _u_of(_dir(20.0, 0.0))))
