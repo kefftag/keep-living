@@ -238,6 +238,8 @@ func _run() -> void:
 		player._swing()
 		await _wait(0.1)
 	_check(Game.zombies_killed > kills_before, "the bat kills a zombie")
+	await _wait(0.5)  # let the swing settle
+	await _shot("10b_bat")
 
 	# Death -> Echo choice -> restart.
 	if Game.is_alive_phase():

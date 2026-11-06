@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://fie0st1j6snq"
-path="res://.godot/imported/fp_bat_realistic_office_worker_3d_model_normal.jpg-c25e6afbfb2c67cd8fab0304fe550fd7.ctex"
+uid="uid://oo8lgfb5gfkl"
+path="res://.godot/imported/fp_bat_fp_bat_basecolor.jpg-8df20a53f9d964b87c8d086b5060a39d.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "f9794b165b0a9c01ffa231c907636f7d"
+"md5": "8af9782e5af522e8098b76060a25dfe7"
 }
 
 [deps]
 
-source_file="res://assets/models/fp_bat_realistic_office_worker_3d_model_normal.jpg"
-dest_files=["res://.godot/imported/fp_bat_realistic_office_worker_3d_model_normal.jpg-c25e6afbfb2c67cd8fab0304fe550fd7.ctex"]
+source_file="res://assets/models/fp_bat_fp_bat_basecolor.jpg"
+dest_files=["res://.godot/imported/fp_bat_fp_bat_basecolor.jpg-8df20a53f9d964b87c8d086b5060a39d.ctex"]
 
 [params]
 

@@ -274,8 +274,10 @@ func _swing() -> void:
 		return
 	swing_cd = SWING_COOLDOWN
 	var tween := create_tween()
-	viewmodel.rotation = Vector3(0.3, 0.9, 0)
-	tween.tween_property(viewmodel, "rotation", Vector3(-0.4, -0.7, -0.3), 0.14)
+	# Wind up to the right, chop down and across. Kept small: the arms are
+	# long meshes and a big sweep drags the sleeves across the whole screen.
+	viewmodel.rotation = Vector3(0.25, 0.45, 0.1)
+	tween.tween_property(viewmodel, "rotation", Vector3(-0.45, -0.35, -0.2), 0.14)
 	tween.tween_property(viewmodel, "rotation", Vector3.ZERO, 0.22)
 	Game.make_noise(global_position, 2.5)
 	Sfx.play("swing", null, -8.0)

@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://debfdt4il4coo"
-path="res://.godot/imported/fp_bat_baseball_bat_arm_1k.jpg-3d3792970df725f0261c2f02ac6adaf0.ctex"
+uid="uid://dljmxhx6vyduk"
+path="res://.godot/imported/fp_bat_fp_bat_normal.jpg-c0657dc85dbed9ca0ce46754f61ce8cf.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "4d2fb18310b5fe121ad7abcee320c8e5"
+"md5": "2effacb50ada56f6397e7a3c319c919e"
 }
 
 [deps]
 
-source_file="res://assets/models/fp_bat_baseball_bat_arm_1k.jpg"
-dest_files=["res://.godot/imported/fp_bat_baseball_bat_arm_1k.jpg-3d3792970df725f0261c2f02ac6adaf0.ctex"]
+source_file="res://assets/models/fp_bat_fp_bat_normal.jpg"
+dest_files=["res://.godot/imported/fp_bat_fp_bat_normal.jpg-c0657dc85dbed9ca0ce46754f61ce8cf.ctex"]
 
 [params]
 
