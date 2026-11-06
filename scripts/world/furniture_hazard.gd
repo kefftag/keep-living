@@ -30,7 +30,7 @@ func _build() -> void:
 	shape_node = Props.box_shape(size, Vector3(0, size.y * 0.5, 0))
 	add_child(shape_node)
 	# Tension pole, hidden until secured. Wedged between top and ceiling.
-	pole = Props.box(Vector3(0.05, 2.5 - size.y, 0.05), Color(0.85, 0.85, 0.9),
+	pole = Props.fbox(Vector3(0.05, 2.5 - size.y, 0.05), "plastic_white",
 		Vector3(0, size.y + (2.5 - size.y) * 0.5, 0))
 	pole.visible = false
 	visual.add_child(pole)

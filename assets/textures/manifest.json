@@ -1,50 +1,91 @@
 {
-  "wallpaper": {
-    "size": 0.5,
-    "source": "generated"
-  },
   "floor_wood": {
-    "size": 2.08,
-    "source": "polyhaven:laminate_floor_03"
-  },
-  "floor_genkan": {
-    "size": 2.0,
-    "source": "polyhaven:rubber_tiles"
+    "size": 1.7,
+    "res": 2048,
+    "source": "polyhaven:laminate_floor_02"
   },
   "floor_cushion": {
-    "size": 2.0,
-    "source": "polyhaven:floor_tiles_04"
+    "size": 1.8,
+    "res": 2048,
+    "source": "polyhaven:grey_tiles"
   },
   "floor_bath": {
-    "size": 1.8,
+    "size": 1.2,
+    "res": 2048,
     "source": "polyhaven:anti_skid_tiles"
   },
+  "floor_genkan": {
+    "size": 1.8,
+    "res": 2048,
+    "source": "polyhaven:granite_tile"
+  },
   "concrete_floor": {
-    "size": 2.5,
+    "size": 3.0,
+    "res": 2048,
     "source": "polyhaven:concrete_floor_worn_001"
+  },
+  "balcony_floor": {
+    "size": 3.0,
+    "res": 2048,
+    "source": "polyhaven:painted_concrete_02"
   },
   "concrete_wall": {
     "size": 2.7,
+    "res": 2048,
     "source": "polyhaven:concrete_wall_008"
   },
   "tile_white": {
-    "size": 1.2,
+    "size": 1.27,
+    "res": 2048,
     "source": "polyhaven:long_white_tiles"
   },
   "wood_light": {
-    "size": 1.0,
+    "size": 1.83,
+    "res": 2048,
     "source": "polyhaven:oak_veneer_01"
   },
   "wood": {
     "size": 1.0,
+    "res": 2048,
     "source": "polyhaven:cherry_veneer"
   },
   "wood_dark": {
     "size": 1.0,
+    "res": 2048,
     "source": "polyhaven:black_walnut_veneer_01"
   },
   "fabric": {
-    "size": 0.6,
+    "size": 0.4,
+    "res": 1024,
     "source": "polyhaven:rough_linen"
+  },
+  "asphalt": {
+    "size": 3.0,
+    "res": 1024,
+    "source": "polyhaven:asphalt_02"
+  },
+  "wallpaper": {
+    "size": 0.6,
+    "source": "generated"
+  },
+  "bath_panel": {
+    "size": 0.9,
+    "source": "generated"
+  },
+  "steel_brushed": {
+    "size": 0.5,
+    "source": "generated"
+  },
+  "facade_tile": {
+    "size": 1.0,
+    "source": "generated over polyhaven:rectangular_facade_tiles"
+  },
+  "facade_paint": {
+    "size": 1.0,
+    "source": "generated"
+  },
+  "macro": {
+    "size": 8.0,
+    "source": "generated"
   }
 }
