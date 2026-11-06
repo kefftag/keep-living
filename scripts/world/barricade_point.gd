@@ -87,7 +87,7 @@ func _build() -> void:
 			_frame_box(visual, Vector3(w + 0.1, 0.06, 0.16), Vector3(0, top + 0.0, 0), "steel_painted")
 			_frame_box(visual, Vector3(0.06, h + 0.03, 0.16), Vector3(-w * 0.5 - 0.0, sill + h * 0.5, 0), "steel_painted")
 			_frame_box(visual, Vector3(0.06, h + 0.03, 0.16), Vector3(w * 0.5 + 0.0, sill + h * 0.5, 0), "steel_painted")
-			_frame_box(visual, Vector3(w, 0.02, 0.16), Vector3(0, sill + 0.01, 0), "stainless")
+			_frame_box(visual, Vector3(w, 0.02, 0.16), Vector3(0, sill + 0.01, 0), "aluminium_dark")
 			var leaf := Props.fbox(Vector3(w - 0.06, h - 0.06, 0.05), "steel_painted", Vector3(0, sill + h * 0.5, 0.02))
 			visual.add_child(leaf)
 			panes.append(leaf)

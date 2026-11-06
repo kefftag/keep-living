@@ -60,7 +60,7 @@ const FINISHES := {
 	"aluminium_dark": [Color(0.22, 0.2, 0.18), 1.0, 0.38, 0.0, 0.5],  # ステンカラー/bronze sash
 	"stainless": [Color(0.74, 0.73, 0.71), 1.0, 0.2, 0.0, 0.5],       # door levers, poles
 	"chrome": [Color(0.9, 0.9, 0.9), 1.0, 0.06, 0.0, 0.5],
-	"steel_painted": [Color(0.17, 0.155, 0.14), 0.0, 0.4, 0.4, 0.5],  # front door (焼付塗装)
+	"steel_painted": [Color(0.23, 0.2, 0.17), 0.0, 0.4, 0.4, 0.5],  # front door (焼付塗装)
 	"steel_painted_light": [Color(0.62, 0.62, 0.6), 0.0, 0.45, 0.3, 0.5],  # meter box door
 	"iron_black": [Color(0.04, 0.04, 0.045), 0.6, 0.45, 0.0, 0.5],    # window grille
 	"plastic_white": [Color(0.8, 0.8, 0.78), 0.0, 0.38, 0.12, 0.5],

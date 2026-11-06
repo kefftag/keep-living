@@ -692,7 +692,7 @@ func _build_reflection_probes() -> void:
 		[0, 2.73, 3.64, 5.46, 0.0],      # washroom
 		[0, 1.82, 5.46, 7.28, 0.0],      # bath
 		[1.82, 2.73, 5.46, 7.28, 0.0],   # toilet
-		[2.73, 4.55, 6.37, 7.28, GENKAN_Y],  # genkan
+		[2.73, 4.55, 6.37, 7.4, GENKAN_Y],   # genkan (reaching into the door reveal)
 	]:
 		var p := ReflectionProbe.new()
 		var y0: float = r[4]
