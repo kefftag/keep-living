@@ -22,6 +22,8 @@ const BAR_HEALTH := Color("#D8433F")
 const BAR_HUNGER := Color("#E0A23A")
 const BAR_THIRST := Color("#3D8FD6")
 const BAR_NOISE := Color("#C9CCCF")
+const BAR_AIR := Color("#9FD0C8")      # clean air: pale teal; it greys as ash comes in
+const ASH_GREY := Color("#8A857C")     # volcanic ash
 const BAR_TRACK := Color(1, 1, 1, 0.09)
 
 # Emergency / feedback
@@ -144,7 +146,7 @@ static func build_theme() -> Theme:
 	t.set_color("font_color", "Label", PAPER)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.85))
 	t.set_constant("outline_size", "Label", 5)
-	t.set_constant("line_spacing", "Label", 2)
+	t.set_constant("line_spacing", "Label", 5)  # room for descenders and underscores
 
 	t.set_font("normal_font", "RichTextLabel", ui_font())
 	t.set_font("bold_font", "RichTextLabel", bold_font())
@@ -380,6 +382,27 @@ static func build_sign_theme() -> Theme:
 	t.set_constant("outline_size", "RichTextLabel", 0)
 	t.set_stylebox("background", "ProgressBar", bar_box(SIGN_TRACK))
 	return t
+
+
+## Settings slider on a sign face: grey track, JR-green fill, square grabber.
+static func style_slider(s: HSlider) -> void:
+	var track := bar_box(SIGN_TRACK)
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
+	s.add_theme_stylebox_override("slider", track)
+	var fill := bar_box(JR_GREEN)
+	fill.content_margin_top = 4
+	fill.content_margin_bottom = 4
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", bar_box(JR_GREEN.lightened(0.15)))
+	var img := Image.create(20, 28, false, Image.FORMAT_RGBA8)
+	img.fill(NAVY)
+	for x in 20:
+		for y in [0, 1, 26, 27]:
+			img.set_pixel(x, y, SIGN_YELLOW)
+	var tex := ImageTexture.create_from_image(img)
+	s.add_theme_icon_override("grabber", tex)
+	s.add_theme_icon_override("grabber_highlight", tex)
 
 
 static func hex(c: Color) -> String:

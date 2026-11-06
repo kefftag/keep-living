@@ -4,8 +4,7 @@ extends Node3D
 
 const Apartment := preload("res://scripts/world/apartment.gd")
 const Player := preload("res://scripts/player/player.gd")
-const NightDirector := preload("res://scripts/systems/night_director.gd")
-const EventDirector := preload("res://scripts/systems/event_director.gd")
+const ScenarioWorld := preload("res://scripts/systems/scenario_world.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const SmokeTest := preload("res://scripts/dev/smoke_test.gd")
 const EnvironmentRig := preload("res://scripts/world/environment_rig.gd")
@@ -35,17 +34,9 @@ func _ready() -> void:
 	zombies.name = "Zombies"
 	add_child(zombies)
 
-	var night := NightDirector.new()
-	night.name = "NightDirector"
-	night.barricades = apartment.barricades
-	night.player = player
-	night.zombie_parent = zombies
-	add_child(night)
-
-	var events := EventDirector.new()
-	events.name = "EventDirector"
-	events.player = player
-	add_child(events)
+	# The active scenario picks its directors and adjusts the world (clue
+	# sources, loot, seal points): scripts/systems/scenario_world.gd.
+	ScenarioWorld.build(self, zombies)
 
 	hud = Hud.new()
 	hud.name = "HUD"

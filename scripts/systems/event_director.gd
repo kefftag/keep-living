@@ -42,8 +42,19 @@ func _fire(ev: Dictionary) -> void:
 			Sfx.play("power_down", null, -4.0, 0.0)
 			Game.say("The lights die. The fridge falls silent. The city goes dark around you.", "warn")
 			Game.world_changed.emit()
+		"water_taint":
+			# The tap still runs, but what comes out isn't safe any more.
+			Game.water_running = false
+			Game.water_note = ev.get("note", "undrinkable")
+			Sfx.play("pipes_knock", Vector3(4.65, 1.0, 5.06), -4.0)
+			Game.say("The water from the tap has turned grey and gritty. It isn't safe to drink any more.", "warn")
+			Game.world_changed.emit()
 		"mail":
 			Game.say(ev.get("text", ""), "info")
+		"say":
+			Game.say(ev.get("text", ""), ev.get("kind", "info"))
+		_:
+			Game.scenario_event.emit(ev)
 
 
 func _quake(strength: float) -> void:

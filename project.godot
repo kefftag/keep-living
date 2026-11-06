@@ -23,6 +23,7 @@ config/custom_user_dir_name="KeepLiving"
 Meta="*res://scripts/autoload/meta_progress.gd"
 Game="*res://scripts/autoload/game_state.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
+Settings="*res://scripts/autoload/settings.gd"
 
 [display]
 

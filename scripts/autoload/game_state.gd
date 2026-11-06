@@ -1,6 +1,11 @@
 extends Node
 ## Per-run state: clock, survival stats, inventory and world flags.
 ## Everything here is wiped on death; see meta_progress.gd for what persists.
+##
+## The active scenario (`scenario`, a script from scripts/data/scenarios.gd)
+## is chosen before a run starts. Everything scenario-specific (clues,
+## insights, theory, timeline, story text, which directors run) is read from
+## it, never hard-wired.
 
 signal stats_changed
 signal phase_changed(phase: int)
@@ -13,10 +18,14 @@ signal earthquake(strength: float)
 signal world_changed  # power / water flags
 signal nav_dirty
 signal shake(amount: float, duration: float)
+## Game minutes passed (also during a rest skip): scenario systems integrate on it.
+signal minutes_advanced(m: float)
+## Timeline events the shared EventDirector doesn't know (e.g. Ash's "ash_begins").
+signal scenario_event(ev: Dictionary)
 
 enum Phase { INTRO, DAY, NIGHT, DEAD, WON }
 
-const Scenario := preload("res://scripts/data/scenario_zombie.gd")
+const Scenarios := preload("res://scripts/data/scenarios.gd")
 const Perks := preload("res://scripts/data/perks.gd")
 
 const DAY_START := 8 * 60
@@ -27,10 +36,12 @@ const DAY_MIN_PER_SEC := 3.0
 const NIGHT_MIN_PER_SEC := 4.0
 const THIRST_PER_MIN := 100.0 / (20.0 * 60.0)
 const HUNGER_PER_MIN := 100.0 / (30.0 * 60.0)
-const WATER_CUT_AT := 1440 + 6 * 60       # day 2, 06:00 (total minutes)
-const POWER_CUT_AT := 2 * 1440 + 8 * 60   # day 3, 08:00
 const GAS_LEAK_SECONDS := 50.0
 const NOISE_MEMORY := 8.0  # seconds a noise lingers for zombie purposes
+
+var scenario: Script = Scenarios.ZOMBIE
+## True until the player leaves the title screen this session.
+var show_title := true
 
 var phase: int = Phase.INTRO
 var day := 1
@@ -46,9 +57,11 @@ var food := 0
 var water := 0
 var materials := 0
 var medkits := 0
+var masks := 0
 var has_weapon := false
 
 var water_running := true
+var water_note := ""        # why the tap is off, when it isn't simply dry
 var power_on := true
 var gas_valve_open := true
 var gas_leaking := false
@@ -59,6 +72,18 @@ var tap_uses := {}  # day -> int
 
 var noise_level := 0.0
 var noise_events: Array = []  # [{pos, amount, t}]
+
+# Ash (scenario_ash.gd); idle in other scenarios.
+var ash_falling := false
+var ash_forecast: Array = []   # ashfall per day (index day - 1)
+var rain_window: Array = []    # [start, end] total minutes
+var looter_nights: Array = []
+var ash_cm := 0.0              # depth outside
+var dust := 0.0                # indoor ash, 0..100 (air quality = 100 - dust)
+var leak := 0.0                # current sum of gap leaks (set by the AshDirector)
+var balcony_load := 0.0        # 0..100, collapses at 100
+var mask_left := 0.0           # game minutes left on the mask you're wearing
+var looters_active := false
 
 var scheduled_events: Array = []  # [{at, type, ...}] consumed by EventDirector
 var tonight_plan: Array = []      # entrance ids, one per zombie, rolled each morning
@@ -74,7 +99,27 @@ var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	_setup_input()
+	if "--smoke-test" in OS.get_cmdline_user_args():
+		scenario = Scenarios.ZOMBIE
+	else:
+		var last := Meta.last_scenario if Meta.last_scenario != "" else Scenarios.DEFAULT_ID
+		var s: Script = Scenarios.by_id(last)
+		scenario = s if Scenarios.lock_reason(s.UNLOCK_AFTER_WIN) == "" else Scenarios.ZOMBIE
 	start_run()
+
+
+## Pick the scenario for the next run (takes effect on start_run / reload).
+func select_scenario(id: String) -> void:
+	scenario = Scenarios.by_id(id)
+	Meta.set_last_scenario(scenario.ID)
+
+
+func scenario_id() -> String:
+	return scenario.ID
+
+
+func is_seal_mode() -> bool:
+	return scenario.MODE == "seal"
 
 
 # --- Run lifecycle ---------------------------------------------------------
@@ -93,6 +138,7 @@ func start_run() -> void:
 	water = 1
 	materials = 2
 	medkits = 0
+	masks = 0
 	has_weapon = Meta.has_perk("familiar_grip")
 	if Meta.has_perk("hoarder"):
 		materials += 3
@@ -102,6 +148,7 @@ func start_run() -> void:
 	if Meta.has_perk("first_aid"):
 		medkits += 1
 	water_running = true
+	water_note = ""
 	power_on = true
 	gas_valve_open = true
 	gas_leaking = false
@@ -111,6 +158,16 @@ func start_run() -> void:
 	tap_uses = {}
 	noise_level = 0.0
 	noise_events = []
+	ash_falling = false
+	ash_forecast = []
+	rain_window = []
+	looter_nights = []
+	ash_cm = 0.0
+	dust = 0.0
+	leak = 0.0
+	balcony_load = 0.0
+	mask_left = 0.0
+	looters_active = false
 	theory_attempted = false
 	zombies_killed = 0
 	run_new_clues = []
@@ -119,48 +176,27 @@ func start_run() -> void:
 	weapon_container = ["shoe_cabinet", "storage_closet", "bedroom_closet"][rng.randi_range(0, 2)]
 	_roll_events()
 	roll_tonight_plan()
+	scenario.on_run_start(self)
 
 
 ## Called when the player dismisses the intro card.
 func begin() -> void:
-	Meta.record_run_start()
+	show_title = false
+	Meta.record_run_start(scenario.ID)
 	phase = Phase.DAY
 	phase_changed.emit(phase)
 	stats_changed.emit()
 
 
 func _roll_events() -> void:
-	scheduled_events = []
-	# The first quake always hits on day 1: it is the tutorial for "secure your stuff".
-	scheduled_events.append({"at": rng.randi_range(13 * 60, 17 * 60), "type": "quake", "strength": 1.0})
-	scheduled_events.append({"at": 2 * 1440 + rng.randi_range(9 * 60, 18 * 60), "type": "quake", "strength": 0.8})
-	scheduled_events.append({"at": 3 * 1440 + rng.randi_range(21 * 60, 27 * 60), "type": "quake", "strength": 1.2})
-	scheduled_events.append({"at": WATER_CUT_AT, "type": "water_cut"})
-	scheduled_events.append({"at": POWER_CUT_AT, "type": "power_cut"})
-	scheduled_events.append({"at": 1440 + 7 * 60, "type": "mail", "text": "Something was slid under the front door during the night."})
+	scheduled_events = scenario.roll_events(rng)
 	scheduled_events.sort_custom(func(a, b): return a["at"] < b["at"])
 
 
 ## Decide which entrances get hit tonight. Rolled in the morning so the
 ## "they don't climb" insight can show it as a forecast.
 func roll_tonight_plan() -> void:
-	tonight_plan = []
-	var weights := {"front_door": 1.0, "balcony_door": 1.3, "bedroom_window": 0.9, "bath_window": 0.45}
-	var count := 2 + day * 2
-	for i in count:
-		tonight_plan.append(_weighted_pick(weights))
-
-
-func _weighted_pick(weights: Dictionary) -> String:
-	var total := 0.0
-	for w in weights.values():
-		total += w
-	var roll := rng.randf() * total
-	for key in weights:
-		roll -= weights[key]
-		if roll <= 0.0:
-			return key
-	return weights.keys()[0]
+	tonight_plan = scenario.roll_tonight_plan(rng, day)
 
 
 # --- Clock -----------------------------------------------------------------
@@ -191,12 +227,9 @@ func _process(delta: float) -> void:
 		return
 
 	if hunger <= 0.0:
-		damage(delta * 0.6, "Starvation. The cupboards were empty long before the end.")
+		damage(delta * 0.6, death_text("starvation"))
 	if thirst <= 0.0:
-		if bathtub_filled_ever:
-			damage(delta * 1.0, "Dehydration.")
-		else:
-			damage(delta * 1.0, "Dehydration. The taps stopped, and the bathtub was never filled.")
+		damage(delta * 1.0, death_text("dehydration" if bathtub_filled_ever else "dehydration_no_tub"))
 
 	noise_level = max(0.0, noise_level - delta * 2.5)
 	while noise_events.size() > 0 and run_time - noise_events[0]["t"] > NOISE_MEMORY:
@@ -214,11 +247,18 @@ func _process(delta: float) -> void:
 			damage(9999.0, "Gas explosion. The gas valve was never closed after the quake.")
 
 
+func death_text(key: String) -> String:
+	return scenario.DEATHS.get(key, key)
+
+
 func advance_minutes(m: float) -> void:
 	var drain := 0.8 if Meta.has_perk("deep_breath") else 1.0
 	minutes += m
 	thirst = max(0.0, thirst - THIRST_PER_MIN * m * drain)
 	hunger = max(0.0, hunger - HUNGER_PER_MIN * m * drain)
+	minutes_advanced.emit(m)
+	if not is_alive_phase():
+		return
 	if phase == Phase.DAY and minutes >= NIGHT_START:
 		_begin_night()
 	elif phase == Phase.NIGHT and minutes >= NIGHT_END:
@@ -228,19 +268,19 @@ func advance_minutes(m: float) -> void:
 
 func _begin_night() -> void:
 	phase = Phase.NIGHT
-	say("Night falls on day %d. Something is moving in the corridor." % day, "warn")
+	say(scenario.NIGHT_MESSAGE % day, "warn")
 	phase_changed.emit(phase)
 
 
 func _end_night() -> void:
 	day += 1
 	minutes = float(DAY_START)
-	if day > Scenario.NIGHTS_TO_SURVIVE:
+	if day > scenario.NIGHTS_TO_SURVIVE:
 		_win()
 		return
 	phase = Phase.DAY
 	roll_tonight_plan()
-	say("Dawn. Day %d. The groaning outside fades." % day, "good")
+	say(scenario.DAWN_MESSAGE % day, "good")
 	phase_changed.emit(phase)
 
 
@@ -253,7 +293,7 @@ func skip_to(target_minutes: float) -> void:
 
 func _win() -> void:
 	phase = Phase.WON
-	Meta.record_win(day)
+	Meta.record_win(day, scenario.ID)
 	phase_changed.emit(phase)
 	run_won.emit()
 
@@ -273,6 +313,16 @@ func damage(amount: float, cause: String) -> void:
 	stats_changed.emit()
 
 
+## Slow damage with no hit feedback (breathing ash, even over a rest skip).
+func wear_down(amount: float, cause: String) -> void:
+	if not is_alive_phase() or amount <= 0.0:
+		return
+	health -= amount
+	if health <= 0.0:
+		health = 0.0
+		_die(cause)
+
+
 func heal(amount: float) -> void:
 	health = min(max_health, health + amount)
 	stats_changed.emit()
@@ -281,7 +331,7 @@ func heal(amount: float) -> void:
 func _die(cause: String) -> void:
 	death_cause = cause
 	phase = Phase.DEAD
-	Meta.record_death(cause, day)
+	Meta.record_death(cause, day, scenario.ID)
 	phase_changed.emit(phase)
 	player_died.emit(cause)
 
@@ -323,6 +373,34 @@ func use_medkit() -> void:
 	stats_changed.emit()
 
 
+func mask_minutes() -> float:
+	if not is_seal_mode():
+		return 0.0
+	var m: float = scenario.MASK_MINUTES
+	if scenario.THEORY_BONUS == "masks" and Meta.is_theory_solved(scenario.ID):
+		m *= 1.5
+	return m
+
+
+## Put on a fresh dust mask (key 4).
+func wear_mask() -> void:
+	if not is_seal_mode():
+		return
+	if masks <= 0:
+		say("You have no masks left.", "warn")
+	elif mask_left > 60.0:
+		say("Your mask is still good for %d hours." % int(mask_left / 60.0), "info")
+	else:
+		masks -= 1
+		mask_left = mask_minutes()
+		say("You press a fresh DS2 mask over your nose and mouth. (%d hours)" % int(mask_left / 60.0), "good")
+	stats_changed.emit()
+
+
+func air_quality() -> float:
+	return 100.0 - dust
+
+
 func cook_meal() -> bool:
 	if food <= 0:
 		say("You have nothing to cook.", "warn")
@@ -355,6 +433,9 @@ func collect_loot(loot: Dictionary, source_name: String) -> void:
 			"medkits":
 				medkits += amount
 				parts.append("%d first-aid kit" % amount)
+			"masks":
+				masks += amount
+				parts.append("%d dust mask%s" % [amount, "" if amount == 1 else "s"])
 			"weapon":
 				if not has_weapon:
 					has_weapon = true
@@ -377,7 +458,7 @@ func spend_materials(amount: int) -> bool:
 
 func weapon_damage() -> float:
 	var dmg := 45.0 if has_weapon else 15.0
-	if Meta.is_theory_solved(Scenario.ID):
+	if scenario.THEORY_BONUS == "damage" and Meta.is_theory_solved(scenario.ID):
 		dmg *= 1.15
 	return dmg
 
@@ -406,31 +487,31 @@ func noise_near(pos: Vector3, radius: float = 6.0) -> float:
 # --- Knowledge -------------------------------------------------------------
 
 func has_insight(insight_id: String) -> bool:
-	return Meta.has_insight(Scenario, insight_id)
+	return Meta.has_insight(scenario, insight_id)
 
 
 func find_clue(clue_id: String) -> void:
-	var is_new := Meta.learn_clue(Scenario.ID, clue_id)
+	var is_new := Meta.learn_clue(scenario.ID, clue_id)
 	if is_new:
 		run_new_clues.append(clue_id)
-		var insight_id: String = Scenario.CLUES[clue_id].get("insight", "")
+		var insight_id: String = scenario.CLUES[clue_id].get("insight", "")
 		if insight_id != "":
-			var insight: Dictionary = Scenario.INSIGHTS[insight_id]
+			var insight: Dictionary = scenario.INSIGHTS[insight_id]
 			say("INSIGHT: %s. %s" % [insight["title"], insight["desc"]], "good")
 	clue_found.emit(clue_id, is_new)
 
 
 func can_submit_theory() -> bool:
 	return (not theory_attempted
-		and not Meta.is_theory_solved(Scenario.ID)
-		and Meta.known_clue_list(Scenario.ID).size() >= Scenario.THEORY_MIN_CLUES)
+		and not Meta.is_theory_solved(scenario.ID)
+		and Meta.known_clue_list(scenario.ID).size() >= scenario.THEORY_MIN_CLUES)
 
 
 func submit_theory(theory_id: String) -> bool:
 	theory_attempted = true
-	if theory_id == Scenario.THEORY_ANSWER:
-		Meta.solve_theory(Scenario.ID)
-		say("You name it: an infection. Knowing what you're fighting makes every swing count (+15% damage, permanently).", "good")
+	if theory_id == scenario.THEORY_ANSWER:
+		Meta.solve_theory(scenario.ID)
+		say(scenario.THEORY_SOLVED_SAY, "good")
 		return true
 	say("It doesn't fit what you've seen. You'll have to think about it next time.", "warn")
 	return false
@@ -467,6 +548,7 @@ func _setup_input() -> void:
 		"eat": [KEY_1],
 		"drink": [KEY_2],
 		"medkit": [KEY_3],
+		"mask": [KEY_4],
 		"journal": [KEY_J, KEY_TAB],
 		"pause": [KEY_ESCAPE],
 	}

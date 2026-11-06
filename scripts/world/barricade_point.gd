@@ -35,6 +35,10 @@ var shards: Node3D
 var planks: Array = []
 var shape_node: CollisionShape3D
 var _next_bang := 0.0
+## Set by a scenario to change what this entrance does (Ash: a gap to seal,
+## scripts/systems/seal.gd). It gets the same calls as an interactable, with
+## this entrance as the first argument.
+var mode_handler: Object = null
 
 
 func _ready() -> void:
@@ -194,8 +198,11 @@ func _break_open() -> void:
 	max_hp = base_hp
 	collision_layer = LAYER_BREACHED
 	Sfx.play("door_break" if style == "door" else "glass_break", global_position + Vector3(0, 1.2, 0), 4.0, 0.05, 40.0)
-	Sfx.play("shriek", global_position + outward() * 0.6 + Vector3(0, 1.5, 0), 0.0, 0.1, 40.0)
-	Game.say("The %s has given way! They're getting in!" % display_name.to_lower(), "danger")
+	if mode_handler:
+		mode_handler.on_breached(self)
+	else:
+		Sfx.play("shriek", global_position + outward() * 0.6 + Vector3(0, 1.5, 0), 0.0, 0.1, 40.0)
+		Game.say("The %s has given way! They're getting in!" % display_name.to_lower(), "danger")
 	Game.shake.emit(0.6, 0.5)
 	Game.make_noise(global_position, 10.0)
 	breached.emit(self)
@@ -223,6 +230,8 @@ func _reinforce_cost() -> int:
 
 
 func get_prompt(alt: bool) -> String:
+	if mode_handler:
+		return mode_handler.get_prompt(self, alt)
 	if broken:
 		if alt or _zombie_blocking():
 			return ""
@@ -239,12 +248,16 @@ func get_prompt(alt: bool) -> String:
 
 
 func get_status() -> String:
+	if mode_handler:
+		return mode_handler.get_status(self)
 	if broken:
 		return "(BREACHED%s)" % (", blocked!" if _zombie_blocking() else "")
 	return "(%d/%d, level %d/%d)" % [int(hp), int(max_hp), level, MAX_LEVEL]
 
 
 func get_duration(alt: bool) -> float:
+	if mode_handler:
+		return mode_handler.get_duration(self, alt)
 	if broken:
 		return 4.0
 	if alt or level >= MAX_LEVEL:
@@ -253,10 +266,14 @@ func get_duration(alt: bool) -> float:
 
 
 func get_hold_sound(_alt: bool) -> String:
+	if mode_handler:
+		return mode_handler.get_hold_sound(self, _alt)
 	return "hammer"
 
 
 func get_noise(_alt: bool) -> float:
+	if mode_handler:
+		return mode_handler.get_noise(self, _alt)
 	var n := 4.0
 	if Game.phase == Game.Phase.NIGHT and Game.has_insight("drawn_to_sound"):
 		n *= 0.5
@@ -264,6 +281,9 @@ func get_noise(_alt: bool) -> float:
 
 
 func perform(alt: bool) -> void:
+	if mode_handler:
+		mode_handler.perform(self, alt)
+		return
 	if broken:
 		if not Game.spend_materials(REBOARD_COST):
 			return
@@ -288,14 +308,7 @@ func perform(alt: bool) -> void:
 	Game.stats_changed.emit()
 
 
-## Float glass: almost no diffuse, sharp reflections (from the probes / SSR).
-static func _clear_glass() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	# Premultiplied: the reflection keeps full strength (at night the pane mirrors
-	# the lit room) while the dark, low-alpha body barely tints the view.
-	m.albedo_color = Color(0.03, 0.035, 0.035, 0.08)
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_PREMULT_ALPHA
-	m.roughness = 0.04
-	m.metallic_specular = 0.6
-	return m
+func get_flag() -> String:
+	if mode_handler:
+		return mode_handler.get_flag(self)
+	return ""

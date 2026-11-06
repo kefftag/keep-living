@@ -55,7 +55,8 @@ func _ready() -> void:
 	head.position.y = EYE_HEIGHT
 	add_child(head)
 	camera = Camera3D.new()
-	camera.fov = 72.0
+	camera.fov = Settings.fov()
+	Settings.changed.connect(_on_settings_changed)
 	camera.near = 0.03
 	camera.current = true
 	head.add_child(camera)
@@ -116,8 +117,10 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotation.y -= event.relative.x * MOUSE_SENS
-		head.rotation.x = clamp(head.rotation.x - event.relative.y * MOUSE_SENS, deg_to_rad(-85), deg_to_rad(85))
+		var sens := MOUSE_SENS * Settings.mouse_factor()
+		var dy: float = event.relative.y * (-1.0 if Settings.invert_y() else 1.0)
+		rotation.y -= event.relative.x * sens
+		head.rotation.x = clamp(head.rotation.x - dy * sens, deg_to_rad(-85), deg_to_rad(85))
 		return
 	if not Game.is_alive_phase():
 		return
@@ -131,6 +134,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.drink()
 	elif event.is_action_pressed("medkit"):
 		Game.use_medkit()
+	elif event.is_action_pressed("mask"):
+		Game.wear_mask()
 
 
 func _physics_process(delta: float) -> void:
@@ -181,7 +186,12 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
+func _on_settings_changed() -> void:
+	camera.fov = Settings.fov()
+
+
 func _on_shake(amount: float, duration: float) -> void:
+	amount *= Settings.shake_scale()
 	_shake_amount = max(_shake_amount, amount)
 	_shake_left = max(_shake_left, duration)
 
