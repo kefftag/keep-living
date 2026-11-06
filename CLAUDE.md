@@ -26,6 +26,9 @@ Design: `docs/GDD.md`. UI: `docs/UI_PLAN.md`. Art pipeline: `docs/BLENDER_PIPELI
 - UI: all built in `scripts/ui/hud.gd` + `menus.gd`, styled only through `scripts/ui/ui_style.gd`
   (Japanese signage look, BIZ UD Gothic bold, nothing under 16 px).
 - Lighting: `scripts/world/environment_rig.gd` (HDRI sky, SDFGI, AgX, auto exposure, sun path).
+- Story layer (docs/STORY.md): `scripts/data/story.gd` holds every memory fragment, omen, loot flavour
+  line and rescue closing line; `Meta.memories` persists them; `story_director.gd` runs the omens in every
+  scenario; the final scenario is `scenario_monday.gd` + `monday_director.gd`.
 - Lived-in clutter: `scripts/world/decor.gd` (no collision, never blocks the navmesh or look-ray).
 
 ## Checks
