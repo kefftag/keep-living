@@ -9,6 +9,14 @@ config/name="Keep Living"
 config/description="A roguelite about surviving the end of the world from inside your Tokyo apartment."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
+config/icon="res://icon.png"
+config/version="0.1.0"
+boot_splash/bg_color=Color(0.063, 0.078, 0.133, 1)
+boot_splash/image="res://icon.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
+config/use_custom_user_dir=true
+config/custom_user_dir_name="KeepLiving"
 
 [autoload]
 
@@ -38,3 +46,4 @@ window/stretch/aspect="expand"
 [rendering]
 
 anti_aliasing/quality/msaa_3d=2
+textures/vram_compression/import_etc2_astc=true
