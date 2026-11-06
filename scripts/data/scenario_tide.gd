@@ -117,8 +117,8 @@ const GUEST_DAILY := 1             # materials he finds each day
 const STORM_POINTS := ["balcony_door", "bedroom_window", "bath_window", "front_door"]
 
 # --- Story text ----------------------------------------------------------------
-const INTRO_FIRST := "Tokyo, Koto ward. A third-floor 1LDK, two kilometres from the bay.\n\nIt's 07:58. Your phone is screaming, and rain is hammering sideways on the balcony glass. Typhoon No. 19 comes ashore tonight, at high tide.\n\nStay inside. Keep the glass in the frames. Keep the phone alive. Keep living."
-const INTRO_AGAIN := "You wake up. 07:58. Rain on the glass, your phone screaming.\n\nAgain.\n\nYou remember the sound of the water in the stairwell."
+const INTRO_FIRST := "Tokyo, Koto ward. Monday, 28 October. A third-floor 1LDK, two kilometres from the bay.\n\nIt's 07:58. Your phone is screaming, and rain is hammering sideways on the balcony glass. Typhoon No. 19 comes ashore tonight, at high tide.\n\nStay inside. Keep the glass in the frames. Keep the phone alive. Keep living."
+const INTRO_AGAIN := "You wake up. Monday, 07:58. Rain on the glass, your phone screaming.\n\nAgain.\n\nMorning number {lives}. You remember the sound of the water in the stairwell."
 const GOAL_TEXT := "Survive %d nights. The storm hits the balcony side hardest: tape and board the glass, bring in what's on the balcony.\nThen the water: the power, the tap and the gas fail one by one. Rescue comes by boat."
 const WAKE_MESSAGE := "Your phone is buzzing on the bedside table. The wind is rising."
 const NIGHT_MESSAGE := "Night falls on day %d. The wind screams around the building."

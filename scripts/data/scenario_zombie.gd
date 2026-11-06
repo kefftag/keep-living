@@ -32,8 +32,8 @@ const WATER_CUT_AT := 1440 + 6 * 60       # day 2, 06:00 (total minutes)
 const POWER_CUT_AT := 2 * 1440 + 8 * 60   # day 3, 08:00
 
 # --- Story text ----------------------------------------------------------------
-const INTRO_FIRST := "Tokyo. A third-floor 1LDK in a quiet part of the city.\n\nIt's 07:58, and your phone is screaming. Outside, something has happened. You don't know what yet.\n\nStay inside. Make this apartment safe. Find out what's going on. Keep living."
-const INTRO_AGAIN := "You wake up. 07:58. Your phone is screaming.\n\nAgain.\n\nYou remember dying."
+const INTRO_FIRST := "Tokyo. Monday, 28 October. A third-floor 1LDK in a quiet part of the city.\n\nIt's 07:58, and your phone is screaming. Outside, something has happened. You don't know what yet.\n\nStay inside. Make this apartment safe. Find out what's going on. Keep living."
+const INTRO_AGAIN := "You wake up. Monday, 07:58. Your phone is screaming.\n\nAgain.\n\nMorning number {lives}. You remember dying."
 const GOAL_TEXT := "Survive %d nights. Days: scavenge, secure and barricade. Nights: they come for the doors and windows.\nAnything you don't secure can kill you too."
 const WAKE_MESSAGE := "Your phone is buzzing on the bedside table."
 const NIGHT_MESSAGE := "Night falls on day %d. Something is moving in the corridor."

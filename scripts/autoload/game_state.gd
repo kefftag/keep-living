@@ -27,11 +27,20 @@ signal scenario_event(ev: Dictionary)
 signal choice_requested(spec: Dictionary)
 ## The last input came from a gamepad (true) or the keyboard / mouse (false).
 signal input_device_changed(pad: bool)
+## A memory fragment (scripts/data/story.gd) was found or re-read.
+signal memory_found(memory_id: String, is_new: bool)
+## A line someone says (omens, the voice at the door): the HUD shows it as a subtitle.
+signal subtitle(text: String)
+## The player got up off the bed after resting.
+signal woke_up
+## Monday: "suit" or "door" (hud.gd plays the ending).
+signal ending_requested(kind: String)
 
 enum Phase { INTRO, DAY, NIGHT, DEAD, WON }
 
 const Scenarios := preload("res://scripts/data/scenarios.gd")
 const Perks := preload("res://scripts/data/perks.gd")
+const Story := preload("res://scripts/data/story.gd")
 
 const DAY_START := 8 * 60
 const REST_UNTIL := 19 * 60 + 30
@@ -112,6 +121,8 @@ var weapon_container := ""
 var theory_attempted := false
 var zombies_killed := 0
 var run_new_clues: Array = []
+var run_memories: Array = []      # memory ids shown this life (found or re-read)
+var run_new_memories: Array = []  # memory ids first found this life
 var death_cause := ""
 var player_sleeping := false
 
@@ -129,7 +140,7 @@ func _ready() -> void:
 	else:
 		var last := Meta.last_scenario if Meta.last_scenario != "" else Scenarios.DEFAULT_ID
 		var s: Script = Scenarios.by_id(last)
-		scenario = s if Scenarios.lock_reason(s.UNLOCK_AFTER_WIN) == "" else Scenarios.ZOMBIE
+		scenario = s if Scenarios.lock_reason_for(s) == "" else Scenarios.ZOMBIE
 	start_run()
 
 
@@ -149,6 +160,16 @@ func is_seal_mode() -> bool:
 
 func is_storm_mode() -> bool:
 	return scenario.MODE == "storm"
+
+
+## The final scenario: the clock is stopped at 07:58 and nothing drains.
+func is_monday() -> bool:
+	return scenario.MODE == "monday"
+
+
+## Walking speed multiplier (Monday: something is wrong with you).
+func walk_mult() -> float:
+	return scenario.WALK_MULT if is_monday() else 1.0
 
 
 ## Nights to survive this life (an early rescue signal can shorten it).
@@ -219,6 +240,8 @@ func start_run() -> void:
 	theory_attempted = false
 	zombies_killed = 0
 	run_new_clues = []
+	run_memories = []
+	run_new_memories = []
 	death_cause = ""
 	player_sleeping = false
 	weapon_container = ["shoe_cabinet", "storage_closet", "bedroom_closet"][rng.randi_range(0, 2)]
@@ -270,6 +293,9 @@ func _process(delta: float) -> void:
 	if not is_alive_phase():
 		return
 	run_time += delta
+	if is_monday():
+		noise_level = max(0.0, noise_level - delta * 2.5)
+		return
 	advance_minutes(delta * minutes_per_second())
 	if not is_alive_phase():
 		return
@@ -303,6 +329,8 @@ func death_text(key: String) -> String:
 
 
 func advance_minutes(m: float) -> void:
+	if is_monday():
+		return  # 07:58, and it stays 07:58
 	var drain := 0.8 if Meta.has_perk("deep_breath") else 1.0
 	minutes += m
 	thirst = max(0.0, thirst - THIRST_PER_MIN * m * drain)
@@ -491,8 +519,10 @@ func cook_meal() -> bool:
 
 # --- Inventory ---------------------------------------------------------------
 
-func collect_loot(loot: Dictionary, source_name: String) -> void:
-	var parts: Array = []
+## `container_id` picks the object named in the message (story.gd PICKUP).
+func collect_loot(loot: Dictionary, source_name: String, container_id: String = "") -> void:
+	var parts: Array = []   # counted: "+3 food"
+	var extras: Array = []  # named: "a METAL BAT"
 	for key in loot:
 		var amount: int = loot[key]
 		if amount <= 0:
@@ -500,34 +530,32 @@ func collect_loot(loot: Dictionary, source_name: String) -> void:
 		match key:
 			"food":
 				food += amount
-				parts.append("%d food" % amount)
+				parts.append("+%d food" % amount)
 			"water":
 				water += amount
-				parts.append("%d water" % amount)
+				parts.append("+%d water" % amount)
 			"materials":
 				materials += amount
-				parts.append("%d materials" % amount)
+				parts.append("+%d materials" % amount)
 			"medkits":
 				medkits += amount
-				parts.append("%d first-aid kit" % amount)
+				parts.append("+%d first aid" % amount)
 			"masks":
 				masks += amount
-				parts.append("%d dust mask%s" % [amount, "" if amount == 1 else "s"])
+				parts.append("+%d dust mask%s" % [amount, "" if amount == 1 else "s"])
 			"power_banks":
 				power_banks += amount
-				parts.append("a charged MOBILE BATTERY" if amount == 1 else "%d mobile batteries" % amount)
+				parts.append("+1 MOBILE BATTERY" if amount == 1 else "+%d mobile batteries" % amount)
 			"crank":
 				if not has_crank:
 					has_crank = true
-					parts.append("a HAND-CRANK CHARGER (key %s)" % glyph("mask"))
+					extras.append("a HAND-CRANK CHARGER, key %s" % glyph("mask"))
 			"weapon":
 				if not has_weapon:
 					has_weapon = true
-					parts.append("a METAL BAT")
-	if parts.is_empty():
-		say("%s: nothing useful." % source_name, "info")
-	else:
-		say("%s: found %s." % [source_name, ", ".join(parts)], "good")
+					extras.append("a METAL BAT")
+	var line := Story.loot_line(container_id, source_name, loot, parts, extras, rng)
+	say(line, "info" if parts.is_empty() and extras.is_empty() else "good")
 	stats_changed.emit()
 
 
@@ -586,6 +614,23 @@ func find_clue(clue_id: String) -> void:
 			var insight: Dictionary = scenario.INSIGHTS[insight_id]
 			say("INSIGHT: %s. %s" % [insight["title"], insight["desc"]], "good")
 	clue_found.emit(clue_id, is_new)
+
+
+## Show a memory fragment; it's remembered forever (Meta). Returns true if new.
+func find_memory(memory_id: String) -> bool:
+	var is_new := Meta.learn_memory(memory_id)
+	if not memory_id in run_memories:
+		run_memories.append(memory_id)
+	if is_new:
+		run_new_memories.append(memory_id)
+	memory_found.emit(memory_id, is_new)
+	return is_new
+
+
+## A spoken line: a subtitle, and the same words in the message feed.
+func voice(text: String, kind: String = "info") -> void:
+	subtitle.emit(text)
+	say(text, kind)
 
 
 func can_submit_theory() -> bool:

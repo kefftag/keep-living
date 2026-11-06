@@ -5,6 +5,13 @@ extends "res://scripts/world/interactable.gd"
 ## entries: [{clue, from (total minutes), needs_power, night_only, day_only,
 ##            flag (a Game.flags key that must be set), battery (phone % it
 ##            costs to read; nothing to read while the phone is dead)}]
+##
+## It can also hold memories (scripts/data/story.gd, source = this node's
+## name): once its clues for now are read, each use shows the next new one
+## (Monday: every memory here again). The phone takes calls from the story
+## director's omen (call_handler).
+
+const Story := preload("res://scripts/data/story.gd")
 
 var verb := "Check"
 var entries: Array = []
@@ -15,6 +22,8 @@ var night_static := false # radio: static hiss at night
 ## A scenario can give this source a second action (Tide: plugging the phone
 ## in). Calls alt_prompt / alt_status / alt_flag / alt_perform with this node.
 var alt_handler: Object = null
+## story_director.gd while the phone rings by itself: is_ringing() / answer().
+var call_handler: Object = null
 var _buzz_t := 1.0
 var _static: AudioStreamPlayer3D
 
@@ -22,7 +31,7 @@ var _static: AudioStreamPlayer3D
 func _process(delta: float) -> void:
 	if not Game.is_alive_phase():
 		return
-	if buzz and _next_clue() != "" and seen_this_run.is_empty():
+	if buzz and (_next_clue() != "" or _next_memory() != "") and seen_this_run.is_empty():
 		_buzz_t -= delta
 		if _buzz_t <= 0.0:
 			_buzz_t = 4.0
@@ -61,16 +70,31 @@ func _next_clue() -> String:
 	return ""
 
 
+## The next memory to show here this life ("" = none).
+func _next_memory() -> String:
+	if name == "phone" and Game.is_storm_mode() and Game.phone_battery <= 0.0:
+		return ""  # Tide: a dead phone shows nothing
+	return Story.next_at(name, Game.scenario_id(), Game.run_memories, true)
+
+
+func _ringing() -> bool:
+	return call_handler != null and call_handler.is_ringing()
+
+
 func get_prompt(alt: bool) -> String:
 	if alt:
 		return alt_handler.alt_prompt(self) if alt_handler else ""
-	if _next_clue() != "":
+	if _ringing():
+		return "Answer it (母 calling)"
+	if _next_clue() != "" or _next_memory() != "":
 		return "%s the %s" % [verb, display_name.to_lower()]
 	return ""
 
 
 func get_status() -> String:
-	if _next_clue() != "":
+	if _ringing():
+		return "(母 calling)"
+	if _next_clue() != "" or _next_memory() != "":
 		return "(something new)"
 	if alt_handler:
 		var s: String = alt_handler.alt_status(self)
@@ -95,14 +119,26 @@ func perform(alt: bool) -> void:
 		if alt_handler:
 			alt_handler.alt_perform(self)
 		return
+	if _ringing():
+		call_handler.answer()
+		return
 	var clue := _next_clue()
 	if clue == "":
+		var mem := _next_memory()
+		if mem != "":
+			if name == "phone" and Game.is_storm_mode():
+				_drain(Game.scenario.PHONE_READ_COST)
+			Game.find_memory(mem)
 		return
 	seen_this_run.append(clue)
 	for entry in entries:
 		if entry["clue"] == clue and entry.has("battery"):
-			if alt_handler and alt_handler.has_method("drain_battery"):
-				alt_handler.drain_battery(float(entry["battery"]))  # low-power mode applies
-			else:
-				Game.phone_battery = max(0.0, Game.phone_battery - float(entry["battery"]))
+			_drain(float(entry["battery"]))
 	Game.find_clue(clue)
+
+
+func _drain(amount: float) -> void:
+	if alt_handler and alt_handler.has_method("drain_battery"):
+		alt_handler.drain_battery(amount)  # low-power mode applies
+	else:
+		Game.phone_battery = max(0.0, Game.phone_battery - amount)

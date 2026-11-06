@@ -28,6 +28,8 @@ const Utility := preload("res://scripts/world/utilities.gd")
 const Barricade := preload("res://scripts/world/barricade_point.gd")
 const Door := preload("res://scripts/world/door.gd")
 const Decor := preload("res://scripts/world/decor.gd")
+const Keepsake := preload("res://scripts/world/keepsake.gd")
+const Story := preload("res://scripts/data/story.gd")
 
 const M := 0.91           # one module (半間)
 const CEIL := 2.4
@@ -56,6 +58,8 @@ var nav_region: NavigationRegion3D
 var barricades := {}  # id -> barricade node
 var doors := {}       # id -> door node
 var room_lights: Array = []
+var wall_clock: Node3D        # the LDK wall clock (story_director.gd sets its hands)
+var keepsakes := {}           # hidden spot id -> keepsake node
 var window_lights: Array = []
 var _rebake_queued := false
 var _probes: Array = []
@@ -484,7 +488,7 @@ func _hazard(id: String, label: String, model: String, size: Vector3, color: Col
 
 
 ## Non-interactive dressing. Wall-mounted pieces (collide=false) don't block.
-func _deco(model: String, size: Vector3, color: Color, pos: Vector3, facing: float, collide := true) -> void:
+func _deco(model: String, size: Vector3, color: Color, pos: Vector3, facing: float, collide := true) -> Node3D:
 	var holder: Node3D
 	if collide:
 		var body := StaticBody3D.new()
@@ -497,6 +501,7 @@ func _deco(model: String, size: Vector3, color: Color, pos: Vector3, facing: flo
 	holder.position = pos
 	holder.rotation.y = facing
 	(nav_region if collide else self).add_child(holder)
+	return holder
 
 
 func _build_furniture() -> void:
@@ -529,7 +534,7 @@ func _build_furniture() -> void:
 	_deco("television", Vector3(1.0, 0.68, 0.25), Color.WHITE, Vector3(6.12, 0.45, 2.0), FACE_W, false)
 	_deco("binoculars", Vector3(0.2, 0.1, 0.16), Color.WHITE, Vector3(5.45, 0.6, 0.35), FACE_N, false)
 	_deco("plant", Vector3(0.45, 1.1, 0.45), Color.WHITE, Vector3(6.05, 0, 3.15), FACE_W)
-	_deco("wall_clock", Vector3(0.3, 0.3, 0.06), Color.WHITE, Vector3(2.8, 2.05, 1.8), FACE_E, false)
+	wall_clock = _deco("wall_clock", Vector3(0.3, 0.3, 0.06), Color.WHITE, Vector3(2.8, 2.05, 1.8), FACE_E, false)
 	_deco("dining_table", Vector3(0.75, 0.7, 0.75), C_WOOD, Vector3(4.2, 0, 3.05), FACE_S)
 	_deco("dining_chair", Vector3(0.42, 0.85, 0.42), C_WOOD, Vector3(4.2, 0, 2.5), FACE_S)
 	_deco("ac_indoor", Vector3(0.8, 0.28, 0.25), Color(0.95, 0.95, 0.95), Vector3(4.55, 2.08, 0.2), FACE_S, false)
@@ -574,6 +579,25 @@ func _build_furniture() -> void:
 	_deco("boots", Vector3(0.3, 0.38, 0.3), Color.WHITE, Vector3(4.35, GENKAN_Y, 6.6), FACE_W, false)
 	_deco("intercom", Vector3(0.18, 0.13, 0.04), Color(0.95, 0.95, 0.95), Vector3(3.75, 1.35, 3.57), FACE_N, false)
 	_deco("breaker_panel", Vector3(0.35, 0.3, 0.1), Color(0.95, 0.95, 0.93), Vector3(2.79, 1.85, 5.05), FACE_E, false)
+	_build_keepsakes()
+
+
+## Hidden spots that hold memories (story.gd SPOTS). Look-ray only (layer 6),
+## so they never touch the navmesh, the zombies or the player.
+func _build_keepsakes() -> void:
+	for id in Story.SPOTS:
+		var spec: Dictionary = Story.SPOTS[id]
+		var k = Keepsake.new()
+		k.name = "keepsake_" + id
+		k.spot_id = id
+		k.display_name = spec["label"]
+		k.prompt_text = spec["prompt"]
+		k.visual_kind = spec["visual"]
+		k.size = spec["size"]
+		k.position = spec["pos"]
+		k.rotation.y = spec["facing"]
+		add_child(k)  # not under the nav region
+		keepsakes[id] = k
 
 
 func _build_outside() -> void:
