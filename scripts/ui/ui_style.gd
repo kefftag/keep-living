@@ -22,6 +22,7 @@ const BAR_HEALTH := Color("#D8433F")
 const BAR_HUNGER := Color("#E0A23A")
 const BAR_THIRST := Color("#3D8FD6")
 const BAR_NOISE := Color("#C9CCCF")
+const BAR_BATTERY := Color("#6CCB5F")  # phone battery: the green of a charged icon
 const BAR_AIR := Color("#9FD0C8")      # clean air: pale teal; it greys as ash comes in
 const ASH_GREY := Color("#8A857C")     # volcanic ash
 const BAR_TRACK := Color(1, 1, 1, 0.09)

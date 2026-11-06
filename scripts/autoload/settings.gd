@@ -14,6 +14,7 @@ const DEFAULTS := {
 	"music_volume": 0.8,
 	"sfx_volume": 0.9,
 	"mouse_sensitivity": 1.0, # multiplier on the player's base sensitivity
+	"stick_sensitivity": 1.0, # gamepad right-stick look speed multiplier
 	"invert_y": false,
 	"fov": 72.0,
 	"fullscreen": false,
@@ -64,6 +65,10 @@ func mouse_factor() -> float:
 	return float(get_value("mouse_sensitivity"))
 
 
+func stick_factor() -> float:
+	return float(get_value("stick_sensitivity"))
+
+
 func invert_y() -> bool:
 	return bool(get_value("invert_y"))
 
@@ -87,6 +92,9 @@ func apply() -> void:
 	if not is_inside_tree():
 		return
 	var root := get_tree().root
+	_fit_ui_scale()
+	if not root.size_changed.is_connected(_fit_ui_scale):
+		root.size_changed.connect(_fit_ui_scale)
 	root.scaling_3d_scale = clamp(float(get_value("resolution_scale")), 0.5, 1.0)
 	root.content_scale_factor = LARGE_TEXT_SCALE if bool(get_value("large_text")) else 1.0
 	if _smoke or DisplayServer.get_name() == "headless":
@@ -95,6 +103,18 @@ func apply() -> void:
 	var want := DisplayServer.WINDOW_MODE_FULLSCREEN if bool(get_value("fullscreen")) else DisplayServer.WINDOW_MODE_WINDOWED
 	if DisplayServer.window_get_mode() != want:
 		DisplayServer.window_set_mode(want)
+
+
+## The UI is laid out for 1600x900 and scaled with the window. On small
+## screens (the Steam Deck's 1280x800) that would shrink 16 px text to 13 px,
+## so there the UI is laid out at 1280x800 instead and drawn 1:1.
+func _fit_ui_scale() -> void:
+	var root := get_tree().root
+	var ws := root.size
+	var compact := ws.x > 0 and ws.x <= 1366 and ws.y <= 820
+	var want := Vector2i(1280, 800) if compact else Vector2i(1600, 900)
+	if root.content_scale_size != want:
+		root.content_scale_size = want
 
 
 func _set_bus(bus: String, linear: float) -> void:

@@ -1,7 +1,9 @@
 extends CharacterBody3D
 ## The survivor, in first person. Mouse to look, WASD to move, Shift to walk
 ## quietly, hold E / R on what you're looking at, LMB / Space to swing,
-## F for the phone light, 1/2/3 to eat/drink/heal.
+## F for the phone light, 1/2/3 to eat/drink/heal, 4 for the scenario item.
+## On a gamepad: sticks to move and look, A / X to use, RT to swing, LB for
+## the light, the D-pad for items, L3 toggles walking quietly.
 
 const Props := preload("res://scripts/world/props.gd")
 
@@ -12,6 +14,8 @@ const REACH := 1.9
 const SWING_RANGE := 1.6
 const SWING_COOLDOWN := 0.6
 const MOUSE_SENS := 0.0022
+const STICK_LOOK_SPEED := 2.8   # rad/s at full deflection (x the stick sensitivity setting)
+const STICK_LOOK_CURVE := 1.8   # response exponent: fine aim near the centre
 const LOOK_MASK := 1 | 2 | 16 | 32  # world, entrances, doors, breached entrances
 const VIEWMODEL_POS := Vector3(0.26, -0.3, -0.42)  # swing pivot, relative to the camera
 
@@ -36,6 +40,7 @@ const HOLD_SOUND_EVERY := {"hammer": 0.45, "rummage": 0.6, "water_pour": 2.3}
 var _shake_amount := 0.0
 var _shake_left := 0.0
 var _bed: Node3D = null
+var _sneak_toggled := false  # L3 on a gamepad
 
 
 func _ready() -> void:
@@ -127,7 +132,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("attack") and not Game.player_sleeping:
 		_swing()
 	elif event.is_action_pressed("flashlight"):
-		flashlight.visible = not flashlight.visible
+		if not flashlight.visible and Game.is_storm_mode() and Game.phone_battery <= 0.0:
+			Game.say("The phone is dead. No light.", "warn")
+		else:
+			flashlight.visible = not flashlight.visible
+		Game.light_on = flashlight.visible
+	elif event.is_action_pressed("sneak_toggle"):
+		_sneak_toggled = not _sneak_toggled
+		Game.say("Walking quietly." if _sneak_toggled else "Walking normally.", "info")
 	elif event.is_action_pressed("eat"):
 		Game.eat()
 	elif event.is_action_pressed("drink"):
@@ -135,7 +147,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("medkit"):
 		Game.use_medkit()
 	elif event.is_action_pressed("mask"):
-		Game.wear_mask()
+		Game.use_item()
 
 
 func _physics_process(delta: float) -> void:
@@ -154,6 +166,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	_stick_look(delta)
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if Game.player_sleeping:
 		if input.length() > 0.1:
@@ -167,7 +180,7 @@ func _physics_process(delta: float) -> void:
 	dir.y = 0
 	if holding:
 		dir = Vector3.ZERO
-	var sneaking := Input.is_action_pressed("sneak")
+	var sneaking := Input.is_action_pressed("sneak") or _sneak_toggled
 	var speed := SNEAK_SPEED if sneaking else SPEED
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
@@ -184,6 +197,21 @@ func _physics_process(delta: float) -> void:
 	head.position.y = EYE_HEIGHT + sin(bob_t) * 0.025
 	viewmodel.position.x = VIEWMODEL_POS.x + cos(bob_t * 0.5) * 0.008
 	move_and_slide()
+
+
+## Right stick look, with a response curve so small deflections aim finely.
+func _stick_look(delta: float) -> void:
+	if Game.player_sleeping:
+		return
+	var v := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+	if v.length() < 0.01:
+		return
+	var mag := pow(minf(v.length(), 1.0), STICK_LOOK_CURVE)
+	v = v.normalized() * mag * STICK_LOOK_SPEED * Settings.stick_factor() * delta
+	if Settings.invert_y():
+		v.y = -v.y
+	rotation.y -= v.x
+	head.rotation.x = clamp(head.rotation.x - v.y, deg_to_rad(-85), deg_to_rad(85))
 
 
 func _on_settings_changed() -> void:

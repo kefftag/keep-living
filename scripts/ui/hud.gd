@@ -21,6 +21,12 @@ var player: Node
 var barricades := {}
 var seal = null           # Ash: scripts/systems/seal.gd (from the AshDirector)
 var seal_mode := false
+var storm_mode := false   # Tide: entrances are glass against the storm
+var tide = null           # Tide: the TideDirector (its storm guard, warnings)
+var battery_bar: ProgressBar
+var battery_row: Control
+var battery_label: Label
+var _battery_fill := -1
 
 var title_root: Control   # menus.gd's title screen, while it's up
 var air_bar: ProgressBar
@@ -61,42 +67,47 @@ var _eew_left := 0.0       # seconds the EEW banner stays up
 var _eew_tween: Tween
 var _eew_flash: Tween
 var top_stack: VBoxContainer  # ticker + feed, top centre
+var _status_panel: Control
+var _side_panel: Control
+var _feed_w := 790.0
+var _layout_t := 0.0
 var ticker: VBoxContainer
-var hint_bar: HBoxContainer
+var hint_bar: HFlowContainer
 var _hint_chips := {}         # hint id -> chip
 var _look_accum := 0.0
 
 const EEW_HEIGHT := 124.0
 const HINT_USES := 3
-## Contextual controls: id -> [keys, label, actions]. Shown until each is used
-## HINT_USES times (counts survive restarts within a session).
+## Contextual controls: id -> [glyph actions (Game.GLYPHS), label, input
+## actions]. Shown until each is used HINT_USES times (counts survive
+## restarts within a session). Key caps follow the last input device.
 const HINTS := [
-	["look", ["Mouse"], "look", []],
-	["move", ["WASD"], "move", ["move_up", "move_down", "move_left", "move_right"]],
-	["sneak", ["Shift"], "walk quietly", ["sneak"]],
-	["use", ["E", "R"], "hold to use", ["interact", "interact_alt"]],
-	["attack", ["LMB"], "swing", ["attack"]],
-	["flashlight", ["F"], "phone light", ["flashlight"]],
-	["items", ["1", "2", "3"], "eat · drink · heal", ["eat", "drink", "medkit"]],
-	["mask", ["4"], "mask", ["mask"]],
-	["journal", ["J"], "journal", ["journal"]],
-	["pause", ["Esc"], "menu", ["pause"]],
+	["look", ["look"], "look", []],
+	["move", ["move"], "move", ["move_up", "move_down", "move_left", "move_right"]],
+	["sneak", ["sneak"], "walk quietly", ["sneak", "sneak_toggle"]],
+	["use", ["interact", "interact_alt"], "hold to use", ["interact", "interact_alt"]],
+	["attack", ["attack"], "swing", ["attack"]],
+	["flashlight", ["flashlight"], "phone light", ["flashlight"]],
+	["items", ["eat", "drink", "medkit"], "eat · drink · heal", ["eat", "drink", "medkit"]],
+	["mask", ["mask"], "mask", ["mask"]],
+	["journal", ["journal"], "journal", ["journal"]],
+	["pause", ["pause"], "menu", ["pause"]],
 ]
-## The full list for the 取扱説明書 Manual page.
+## The full list for the 取扱説明書 Manual page: [keyboard keys, gamepad, what].
 const MANUAL := [
-	[["Mouse"], "Look around"],
-	[["W", "A", "S", "D"], "Move (arrow keys work too)"],
-	[["Shift"], "Walk quietly: makes far less noise"],
-	[["E"], "Hold to use what you're looking at"],
-	[["R"], "Hold for the second action, when there is one"],
-	[["LMB", "Space"], "Swing (bare hands, or the bat once you have it)"],
-	[["F"], "Phone light on / off"],
-	[["1"], "Eat"],
-	[["2"], "Drink"],
-	[["3"], "First aid"],
-	[["4"], "Put on a dust mask (Ash)"],
-	[["J", "Tab"], "Journal: clues, insights, theory, Echoes"],
-	[["Esc"], "Menu"],
+	[["Mouse"], ["RS"], "Look around"],
+	[["W", "A", "S", "D"], ["LS"], "Move (arrow keys work too)"],
+	[["Shift"], ["L3"], "Walk quietly: far less noise (L3 toggles it)"],
+	[["E"], ["A"], "Hold to use what you're looking at"],
+	[["R"], ["X"], "Hold for the second action, when there is one"],
+	[["LMB", "Space"], ["RT"], "Swing (bare hands, or the bat once you have it)"],
+	[["F"], ["LB"], "Phone light on / off"],
+	[["1"], ["D↑"], "Eat"],
+	[["2"], ["D→"], "Drink"],
+	[["3"], ["D↓"], "First aid"],
+	[["4"], ["D←"], "Item: dust mask (Ash), crank charger (Tide)"],
+	[["J", "Tab"], ["Y"], "Journal: clues, insights, theory, Echoes"],
+	[["Esc"], ["Start"], "Menu (B or Esc goes back)"],
 ]
 static var _hint_uses := {}
 
@@ -134,6 +145,8 @@ func _ready() -> void:
 	var ash = get_parent().get_node_or_null("AshDirector") if get_parent() else null
 	if ash:
 		seal = ash.seal
+	storm_mode = Game.is_storm_mode()
+	tide = get_parent().get_node_or_null("TideDirector") if get_parent() else null
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -158,6 +171,8 @@ func _ready() -> void:
 	Game.clue_found.connect(_on_clue_found)
 	Game.player_died.connect(_on_player_died)
 	Game.run_won.connect(_on_run_won)
+	Game.choice_requested.connect(_show_choice)
+	Game.input_device_changed.connect(_on_device_changed)
 
 	if Game.phase == Game.Phase.INTRO:
 		if Game.show_title:
@@ -243,6 +258,7 @@ func _button(text: String, cb: Callable) -> Button:
 
 func _build_status() -> void:
 	var p := _panel()
+	_status_panel = p
 	p.position = Vector2(16, 16)
 	root.add_child(p)
 	var v := VBoxContainer.new()
@@ -278,6 +294,12 @@ func _build_status() -> void:
 	air_bar = _bar(UI.BAR_AIR)
 	air_row = _stat_row(v, "空気  Air", air_bar)
 	air_row.visible = seal_mode
+	battery_bar = _bar(UI.BAR_BATTERY)
+	battery_row = _stat_row(v, "電池  Phone", battery_bar)
+	battery_bar.custom_minimum_size.x = 100
+	battery_label = _label("", UI.FS_HUD, C_TEXT)
+	battery_row.add_child(battery_label)
+	battery_row.visible = storm_mode
 	inv_label = _label("", UI.FS_HUD)
 	v.add_child(inv_label)
 	info_label = _label("", UI.FS_HUD, C_WARN)
@@ -289,6 +311,7 @@ func _build_status() -> void:
 func _build_barricade_panel() -> void:
 	# A backlit JR-style sign in a steel frame, with a red location sticker.
 	var p := UI.sign_panel(12)
+	_side_panel = p
 	p.theme = UI.build_sign_theme()
 	p.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	p.position = Vector2(-16, 16)
@@ -300,6 +323,8 @@ func _build_barricade_panel() -> void:
 	var head := HBoxContainer.new()
 	if seal_mode:
 		head.add_child(_bilingual("目張り", "Seals", 26, UI.FS_SMALL, UI.JR_GREEN, UI.SIGN_DIM))
+	elif storm_mode:
+		head.add_child(_bilingual("台風対策", "Storm guard", 26, UI.FS_SMALL, UI.JR_GREEN, UI.SIGN_DIM))
 	else:
 		head.add_child(_bilingual("出入口", "Entrances", 26, UI.FS_SMALL, UI.JR_GREEN, UI.SIGN_DIM))
 	head.add_child(_expander())
@@ -313,6 +338,16 @@ func _build_barricade_panel() -> void:
 			var bar := _bar(UI.JR_GREEN, 260)
 			bar.max_value = 2.0
 			bar.custom_minimum_size.y = 8
+			v.add_child(name_l)
+			v.add_child(bar)
+			barricade_rows[id] = {"label": name_l, "bar": bar, "fill": -1}
+		return
+	if storm_mode and tide:
+		for id in tide.guard.nodes:
+			if not tide.guard.is_glass(id):
+				continue
+			var name_l := _label(tide.guard.name_of(id), UI.FS_HUD, UI.INK)
+			var bar := _bar(UI.JR_GREEN, 260)
 			v.add_child(name_l)
 			v.add_child(bar)
 			barricade_rows[id] = {"label": name_l, "bar": bar, "fill": -1}
@@ -387,8 +422,8 @@ func _draw_ring_cap(c: Control) -> void:
 	c.draw_rect(rect, UI.SIGN_YELLOW)
 	c.draw_rect(Rect2(rect.position, rect.size + Vector2(0, 3)), UI.POSTER_BLACK, false, 1.5)
 	var font := UI.bold_font()
-	var fs := UI.FS_PROMPT
 	var key: String = c.get_meta("key", "")
+	var fs := UI.FS_PROMPT if key.length() <= 2 else UI.FS_SMALL
 	var w := font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var base := centre.y + (font.get_ascent(fs) - font.get_descent(fs)) * 0.5
 	c.draw_string(font, Vector2(centre.x - w * 0.5, base), key, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UI.KEYCAP_TEXT)
@@ -422,7 +457,7 @@ func _build_prompt() -> void:
 	_prompt_sticker = UI.sticker("")
 	_prompt_sticker.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	head.add_child(_prompt_sticker)
-	for key in ["E", "R"]:
+	for key in [Game.glyph("interact"), Game.glyph("interact_alt")]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -444,15 +479,28 @@ func _build_prompt() -> void:
 
 func _build_help() -> void:
 	# Contextual key-cap chips, bottom-left. Each disappears once used enough.
-	hint_bar = HBoxContainer.new()
-	hint_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	hint_bar.position = Vector2(16, -50)
-	hint_bar.add_theme_constant_override("separation", 6)
+	if is_instance_valid(hint_bar):
+		hint_bar.queue_free()
+	_hint_chips.clear()
+	# Wraps onto a second row (growing upwards) on narrow screens.
+	hint_bar = HFlowContainer.new()
+	hint_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	hint_bar.offset_left = 16
+	hint_bar.offset_right = -16
+	hint_bar.offset_top = -50
+	hint_bar.offset_bottom = -14
+	hint_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	hint_bar.add_theme_constant_override("h_separation", 6)
+	hint_bar.add_theme_constant_override("v_separation", 6)
 	hint_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if overlay_kind == "title":
+		hint_bar.modulate.a = 0.0
 	root.add_child(hint_bar)
+	if is_instance_valid(overlay):
+		root.move_child(hint_bar, overlay.get_index())  # stay under the overlays
 	for h in HINTS:
 		var id: String = h[0]
-		if _hint_uses.get(id, 0) >= HINT_USES or (id == "mask" and not seal_mode):
+		if _hint_uses.get(id, 0) >= HINT_USES or (id == "mask" and not (seal_mode or storm_mode)):
 			continue
 		var chip := PanelContainer.new()
 		chip.add_theme_stylebox_override("panel", UI.chip_box())
@@ -461,9 +509,9 @@ func _build_help() -> void:
 		row.add_theme_constant_override("separation", 3)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for k in h[1]:
-			row.add_child(_keycap(k))
+			row.add_child(_keycap(Game.glyph(k)))
 		row.add_child(_spacer(4))
-		var l := _label(h[2], UI.FS_SMALL, C_TEXT)
+		var l := _label(("crank charger" if storm_mode else h[2]) if id == "mask" else h[2], UI.FS_SMALL, C_TEXT)
 		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(l)
 		chip.add_child(row)
@@ -476,6 +524,17 @@ func _spacer(w: float) -> Control:
 	c.custom_minimum_size = Vector2(w, 0)
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return c
+
+
+## Key caps follow the last input device: rebuild what shows them.
+func _on_device_changed(pad: bool) -> void:
+	_build_help()
+	if pad and (overlay.visible or is_instance_valid(title_root)) and get_viewport().gui_get_focus_owner() == null:
+		_focus_first()
+	for i in prompt_rows.size():
+		var cap: Control = prompt_rows[i]["cap"]
+		cap.set_meta("key", Game.glyph("interact_alt" if i == 1 else "interact"))
+		cap.queue_redraw()
 
 
 func _use_hint(id: String) -> void:
@@ -662,7 +721,7 @@ func _process(delta: float) -> void:
 	clock_label.text = Game.clock_string()
 	match Game.phase:
 		Game.Phase.NIGHT:
-			phase_label.text = "夜  NIGHT %d / %d" % [Game.day, Game.scenario.NIGHTS_TO_SURVIVE]
+			phase_label.text = "夜  NIGHT %d / %d" % [Game.day, Game.nights_goal()]
 			phase_label.add_theme_color_override("font_color", C_DANGER)
 		Game.Phase.DAY:
 			phase_label.text = "日中  DAY"
@@ -685,6 +744,15 @@ func _process(delta: float) -> void:
 		var mask := "Mask on: %dh %02dm" % [int(Game.mask_left / 60.0), int(Game.mask_left) % 60] if Game.mask_left > 0.0 else "No mask on"
 		inv_label.text = "Food %d   Water %d   First aid %d\nMaterials %d   Masks %d   %s\n%s" % [
 			Game.food, Game.water, Game.medkits, Game.materials, Game.masks, "Metal bat" if Game.has_weapon else "Bare hands", mask]
+	elif storm_mode:
+		_refresh_battery()
+		var extras: Array = []
+		if Game.power_banks > 0:
+			extras.append("Mobile battery x%d" % Game.power_banks)
+		if Game.has_crank:
+			extras.append("Crank charger [%s]" % Game.glyph("mask"))
+		inv_label.text = "Food %d   Water %d   First aid %d\nMaterials %d   %s" % [
+			Game.food, Game.water, Game.medkits, Game.materials, "   ".join(extras) if not extras.is_empty() else "No charger"]
 	else:
 		inv_label.text = "Food %d   Water %d   First aid %d\nMaterials %d   %s" % [
 			Game.food, Game.water, Game.medkits, Game.materials, "Metal bat" if Game.has_weapon else "Bare hands"]
@@ -693,10 +761,17 @@ func _process(delta: float) -> void:
 	_refresh_prompt()
 	if seal_mode:
 		_refresh_seals()
+	elif storm_mode:
+		_refresh_storm()
 	else:
 		_refresh_barricades()
 	_refresh_vignette(delta)
 	_refresh_eew(delta)
+	_layout_t -= delta
+	if _layout_t <= 0.0:
+		_layout_t = 0.25
+		_fit_feed()
+	_pad_scroll(delta)
 	if overlay_kind == "title" and player and has_meta("title_yaw"):
 		# A slow look around the room behind the title.
 		player.rotation.y = get_meta("title_yaw") + sin(Time.get_ticks_msec() * 0.00012) * 0.12
@@ -716,9 +791,11 @@ func _info_text() -> String:
 		lines.append("Water cuts out: day 2, 06:00")
 	if seal_mode:
 		lines.append_array(_ash_info())
-	if Game.has_insight("rescue_day"):
-		var left: int = Game.scenario.NIGHTS_TO_SURVIVE - Game.day + (1 if Game.phase == Game.Phase.DAY else 0)
-		lines.append("Rescue at dawn on day %d (%d night%s to go)" % [Game.scenario.NIGHTS_TO_SURVIVE + 1, left, "" if left == 1 else "s"])
+	if storm_mode and tide:
+		lines.append_array(tide.info_lines())
+	elif Game.has_insight("rescue_day"):
+		var left: int = Game.nights_goal() - Game.day + (1 if Game.phase == Game.Phase.DAY else 0)
+		lines.append("Rescue at dawn on day %d (%d night%s to go)" % [Game.nights_goal() + 1, left, "" if left == 1 else "s"])
 	if Game.has_insight("they_dont_climb") and Game.phase == Game.Phase.DAY:
 		var counts := {}
 		for id in Game.tonight_plan:
@@ -825,7 +902,7 @@ func _ash_info() -> Array:
 	var s: Script = Game.scenario
 	var lines: Array = []
 	if Game.is_alive_phase() and Game.air_quality() < s.HARM_BELOW:
-		lines.append("The air is hurting you. Seal the gaps, or wear a mask [4].")
+		lines.append("The air is hurting you. Seal the gaps, or wear a mask [%s]." % Game.glyph("mask"))
 	if Game.has_insight("ash_forecast") and not Game.ash_forecast.is_empty():
 		var today: float = Game.ash_forecast[clampi(Game.day - 1, 0, 4)]
 		var txt := "降灰予報 Ash today: %s" % s.forecast_label(today)
@@ -883,6 +960,65 @@ func _refresh_seals() -> void:
 			bar.add_theme_stylebox_override("fill", UI.bar_box([UI.JR_GREEN, UI.SIGN_YELLOW.darkened(0.1), UI.ALERT_RED][tier]))
 
 
+# --- Tide ------------------------------------------------------------------------
+
+func _refresh_battery() -> void:
+	var b := Game.phone_battery
+	battery_bar.value = b
+	var charging := Game.phone_plugged and Game.power_on
+	battery_label.text = "%d%%%s" % [int(b), " 充電" if charging else ""]
+	var tier := 0 if b >= 40.0 else (1 if b >= 15.0 else 2)
+	if tier != _battery_fill:
+		_battery_fill = tier
+		battery_bar.add_theme_stylebox_override("fill", UI.bar_box([UI.BAR_BATTERY, UI.SIGN_YELLOW, UI.BAR_HEALTH][tier]))
+
+
+func _refresh_storm() -> void:
+	if tide == null:
+		return
+	var g = tide.guard
+	var blink := int(Time.get_ticks_msec() / 250) % 2 == 0
+	for id in barricade_rows:
+		var row: Dictionary = barricade_rows[id]
+		var node = g.nodes[id]
+		var l: Label = row["label"]
+		l.text = "%s  %s" % [g.name_of(id), g.status_word(id)]
+		var c := UI.INK
+		if node.broken:
+			c = UI.ALERT_RED
+		elif Game.run_time - node.last_hit_time < 0.8:
+			c = UI.ALERT_RED if blink else UI.SIGN_WARN
+		l.add_theme_color_override("font_color", c)
+		var bar: ProgressBar = row["bar"]
+		bar.max_value = node.max_hp
+		bar.value = 0.0 if node.broken else node.hp
+		var ratio: float = 0.0 if node.broken else node.hp / max(1.0, node.max_hp)
+		var tier := 0 if ratio > 0.6 else (1 if ratio > 0.3 else 2)
+		if tier != row["fill"]:
+			row["fill"] = tier
+			bar.add_theme_stylebox_override("fill", UI.bar_box([UI.JR_GREEN, UI.SIGN_YELLOW.darkened(0.1), UI.ALERT_RED][tier]))
+
+
+## A scenario's moral choice (Tide: Tanaka at the door), as a sign card: the
+## situation, then one button per option with what it costs under it.
+func _show_choice(spec: Dictionary) -> void:
+	Sfx.play("ui_click", null, -6.0)
+	_open("choice", spec.get("jp", "選択"), spec.get("en", "Choose"))
+	overlay_box.add_child(_text(spec.get("text", ""), 22))
+	overlay_box.add_child(_label("どうする?  What do you do?", UI.FS_NOTE, oc_dim))
+	for opt in spec.get("options", []):
+		var cb: Callable = opt["call"]
+		var b := _button(opt["label"], func():
+			_close()
+			cb.call())
+		b.name = "choice_" + str(opt.get("kind", "opt"))
+		b.custom_minimum_size = Vector2(790, 52)
+		b.add_theme_font_size_override("font_size", 24)
+		overlay_box.add_child(b)
+		overlay_box.add_child(_text(opt.get("note", ""), UI.FS_NOTE, oc_good if opt.get("kind", "") == "good" else oc_warn))
+	_fit_overlay()
+
+
 # --- Subtitles -------------------------------------------------------------------
 
 const CAPTIONS := {
@@ -903,6 +1039,9 @@ const CAPTIONS := {
 	"furniture_crash": "A heavy crash",
 	"helicopter": "Rotor noise",
 	"gas_hiss": "Hissing gas",
+	"knock": "Knocking at the front door",
+	"debris_hit": "Something slams into the glass",
+	"boat": "An outboard motor",
 }
 
 
@@ -965,7 +1104,7 @@ func _on_message(text: String, kind: String) -> void:
 	var l := _label(text, UI.FS_FEED, colors.get(kind, C_TEXT))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(770, 0)
+	l.custom_minimum_size = Vector2(_feed_w - 20.0, 0)
 	l.add_theme_constant_override("outline_size", 5)
 	# A dark caption strip behind each line, like TV subtitles, so green and
 	# white text stay readable over white walls and pale floors.
@@ -974,7 +1113,7 @@ func _on_message(text: String, kind: String) -> void:
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plate.add_child(l)
 	feed.add_child(plate)
-	while feed.get_child_count() > 5:
+	while feed.get_child_count() > (5 if _feed_w >= 700.0 else 3):  # fewer lines in a narrow column
 		var old := feed.get_child(0)
 		feed.remove_child(old)
 		old.queue_free()
@@ -982,6 +1121,28 @@ func _on_message(text: String, kind: String) -> void:
 	tween.tween_interval(5.0)
 	tween.tween_property(plate, "modulate:a", 0.0, 1.0)
 	tween.tween_callback(plate.queue_free)
+
+
+## The message column sits centred between the status panel and the entrances
+## sign; on narrow screens (Steam Deck) it shrinks to the gap between them.
+func _fit_feed() -> void:
+	var vw: float = root.size.x
+	var left: float = _status_panel.position.x + _status_panel.size.x + 10.0
+	var right: float = _side_panel.position.x - 10.0
+	var w := 790.0
+	var x := (vw - w) * 0.5
+	if x < left or x + w > right:
+		w = clampf(right - left, 380.0, 790.0)
+		x = left if left + w <= right else (vw - w) * 0.5
+	if absf(w - _feed_w) > 1.0 or absf(top_stack.position.x - x) > 1.0:
+		_feed_w = w
+		top_stack.position.x = x
+		top_stack.custom_minimum_size.x = w
+		top_stack.size.x = w
+		feed.custom_minimum_size.x = w
+		for plate in feed.get_children():
+			if plate.get_child_count() > 0 and plate.get_child(0) is Label:
+				(plate.get_child(0) as Label).custom_minimum_size.x = w - 20.0
 
 
 ## Danger: an NHK-style red テロップ strip with a white 速報 tag. Wipes in from
@@ -1007,7 +1168,7 @@ func _ticker_message(text: String) -> void:
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(l)
 	ticker.add_child(strip)
-	while ticker.get_child_count() > 3:
+	while ticker.get_child_count() > (3 if _feed_w >= 700.0 else 2):
 		var old := ticker.get_child(0)
 		ticker.remove_child(old)
 		old.queue_free()
@@ -1059,6 +1220,7 @@ func _build_overlay() -> void:
 	_ov_scroll = ScrollContainer.new()
 	_ov_scroll.custom_minimum_size = Vector2(812, 0)
 	_ov_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_ov_scroll.follow_focus = true  # gamepad focus scrolls long pages (journal, credits)
 	margin.add_child(_ov_scroll)
 	overlay_box = VBoxContainer.new()
 	overlay_box.add_theme_constant_override("separation", 10)
@@ -1111,9 +1273,47 @@ func _fit_overlay() -> void:
 	var head: float = _ov_header.get_combined_minimum_size().y if _ov_header.visible else 0.0
 	var max_h: float = root.get_viewport_rect().size.y - 140.0 - head
 	_ov_scroll.custom_minimum_size.y = min(want, max_h)
+	if overlay_kind in ["end", "choice"]:
+		# A button still held from play (A / E) must not pick an option by accident.
+		var kind := overlay_kind
+		await get_tree().create_timer(0.6, true).timeout
+		if not is_inside_tree() or overlay_kind != kind:
+			return
+	_focus_first()
+
+
+## Gamepad: put focus on the first button of whatever just opened.
+func _focus_first() -> void:
+	var c := overlay_box if overlay.visible else (title_root as Control)
+	if c == null:
+		return
+	var first := _first_focusable(c)
+	if first:
+		first.grab_focus()
+		_ov_scroll.scroll_vertical = 0
+
+
+func _first_focusable(n: Node) -> Control:
+	for child in n.get_children():
+		if (child is BaseButton and not child.disabled or child is Slider) and child.visible and child.focus_mode != Control.FOCUS_NONE:
+			return child
+		var deeper := _first_focusable(child)
+		if deeper:
+			return deeper
+	return null
+
+
+## Right stick scrolls a long overlay (journal, credits) on a gamepad.
+func _pad_scroll(delta: float) -> void:
+	if not overlay.visible:
+		return
+	var y := Input.get_axis("look_up", "look_down")
+	if absf(y) > 0.2:
+		_ov_scroll.scroll_vertical += int(y * 900.0 * delta)
 
 
 func _close() -> void:
+	get_viewport().gui_release_focus()
 	overlay.visible = false
 	overlay_kind = ""
 	get_tree().paused = false
@@ -1173,6 +1373,11 @@ func _poster_line(text: String, size: int = 26) -> Label:
 	return l
 
 
+## Esc, Start or B: back out of the current screen.
+func _back(event: InputEvent) -> bool:
+	return event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if overlay_kind == "" and Game.is_alive_phase() and event is InputEventMouseButton and event.pressed \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
@@ -1188,31 +1393,31 @@ func _unhandled_input(event: InputEvent) -> void:
 				_show_pause()
 				get_viewport().set_input_as_handled()
 		"reading":
-			if event.is_action_pressed("interact") or event.is_action_pressed("pause") or event.is_action_pressed("ui_accept"):
+			if event.is_action_pressed("interact") or _back(event) or event.is_action_pressed("ui_accept"):
 				_close()
 				get_viewport().set_input_as_handled()
 		"journal":
-			if event.is_action_pressed("journal") or event.is_action_pressed("pause"):
+			if event.is_action_pressed("journal") or _back(event):
 				_close()
 				get_viewport().set_input_as_handled()
 		"pause":
-			if event.is_action_pressed("pause"):
+			if _back(event):
 				_close()
 				get_viewport().set_input_as_handled()
 		"manual":
-			if event.is_action_pressed("pause"):
+			if _back(event):
 				_show_pause()
 				get_viewport().set_input_as_handled()
 		"intro":
-			if event.is_action_pressed("ui_accept") or event.is_action_pressed("interact"):
-				_start_run()
+			if event.is_action_pressed("interact") and not event is InputEventJoypadButton:
+				_start_run()  # keyboard E; on a pad, A presses the focused button
 				get_viewport().set_input_as_handled()
 		"scenarios":
-			if event.is_action_pressed("pause"):
+			if _back(event):
 				_show_title()
 				get_viewport().set_input_as_handled()
 		"settings", "credits":
-			if event.is_action_pressed("pause"):
+			if _back(event):
 				var back: Callable = get_meta("settings_back", Callable(self, "_show_pause"))
 				back.call()
 				get_viewport().set_input_as_handled()
@@ -1244,10 +1449,12 @@ func _show_intro() -> void:
 		overlay_box.add_child(_text("Echoes: " + ", ".join(names), UI.FS_BODY, oc_good))
 	overlay_box.add_child(_text(s.GOAL_TEXT % s.NIGHTS_TO_SURVIVE, UI.FS_BODY, oc_dim))
 	if s.MODE == "seal":
-		overlay_box.add_child(_text("Hold E on a door, window or vent to tape it shut. Press 4 to put on a dust mask.", UI.FS_BODY, oc_good))
+		overlay_box.add_child(_text("Hold %s on a door, window or vent to tape it shut. Press %s to put on a dust mask." % [Game.glyph("interact"), Game.glyph("mask")], UI.FS_BODY, oc_good))
+	elif s.MODE == "storm":
+		overlay_box.add_child(_text("Hold %s on a window to tape it, then board it. Hold %s on the phone to plug it in while the power lasts. The phone light (%s) runs on its battery." % [Game.glyph("interact"), Game.glyph("interact_alt"), Game.glyph("flashlight")], UI.FS_BODY, oc_good))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	row.add_child(_button("起きる  Get up  [E]", _start_run))
+	row.add_child(_button("起きる  Get up  [%s]" % Game.glyph("accept"), _start_run))
 	row.add_child(_button("タイトルへ  Title screen", _go_title))
 	overlay_box.add_child(row)
 	_fit_overlay()
@@ -1282,7 +1489,7 @@ func _show_reading(clue_id: String, is_new: bool) -> void:
 	if insight_id != "":
 		var ins: Dictionary = Game.scenario.INSIGHTS[insight_id]
 		overlay_box.add_child(_text("Insight: %s. %s" % [ins["title"], ins["desc"]], UI.FS_BODY, oc_good))
-	overlay_box.add_child(_button("閉じる  Close  [E]", _close))
+	overlay_box.add_child(_button("閉じる  Close  [%s]" % Game.glyph("accept"), _close))
 	_fit_overlay()
 
 
@@ -1333,7 +1540,7 @@ func _show_journal() -> void:
 	var sid: String = Game.scenario.ID
 	overlay_box.add_child(_text("%s: lives %d   Rescues %d   Best: day %d%s" % [Game.scenario.TITLE,
 		Meta.runs_in(sid), Meta.wins_in(sid), Meta.best_day_in(sid), _kills_text("   %s this life: %d")], UI.FS_BODY, oc_dim))
-	overlay_box.add_child(_button("閉じる  Close  [J]", _close))
+	overlay_box.add_child(_button("閉じる  Close  [%s]" % Game.glyph("journal"), _close))
 	_fit_overlay()
 
 
@@ -1358,22 +1565,27 @@ func _show_manual() -> void:
 	_open("manual", "取扱説明書", "Manual")
 	overlay_box.add_child(_bilingual("操作方法", "Controls", 26, UI.FS_NOTE, oc_accent, oc_dim))
 	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 24)
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 20)
 	grid.add_theme_constant_override("v_separation", 10)
+	for head in ["キーボード  Keyboard", "パッド  Gamepad", ""]:
+		grid.add_child(_label(head, UI.FS_NOTE, oc_dim))
 	for entry in MANUAL:
-		var keys := HBoxContainer.new()
-		keys.add_theme_constant_override("separation", 6)
-		keys.custom_minimum_size = Vector2(230, 0)
-		for k in entry[0]:
-			keys.add_child(_keycap(k, UI.FS_BODY))
-		grid.add_child(keys)
-		var l := _label(entry[1], UI.FS_BODY, oc_text)
+		for col in 2:
+			var keys := HBoxContainer.new()
+			keys.add_theme_constant_override("separation", 6)
+			keys.custom_minimum_size = Vector2(200 if col == 0 else 110, 0)
+			for k in entry[col]:
+				keys.add_child(_keycap(k, UI.FS_BODY))
+			grid.add_child(keys)
+		var l := _label(entry[2], UI.FS_BODY, oc_text)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(440, 0)
 		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		grid.add_child(l)
 	overlay_box.add_child(grid)
 	overlay_box.add_child(_text("Hold E or R on something to use it; the ring around the key fills as you work. Holding takes time and makes noise.", UI.FS_NOTE, oc_dim))
-	overlay_box.add_child(_button("戻る  Back  [Esc]", _show_pause))
+	overlay_box.add_child(_button("戻る  Back  [%s]" % Game.glyph("back"), _show_pause))
 	_fit_overlay()
 
 
@@ -1491,6 +1703,10 @@ func _on_run_won() -> void:
 	var story := _text(Game.scenario.RESCUE_TEXT % Game.day, 22)
 	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay_box.add_child(story)
+	if Game.end_note != "":
+		var note := _text(Game.end_note, UI.FS_BODY, UI.SIGN_YELLOW)
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		overlay_box.add_child(note)
 	overlay_box.add_child(_text("Clues remembered: %d / %d.   Lives it took: %d.%s" % [
 		Meta.known_clue_list(Game.scenario.ID).size(), Game.scenario.CLUES.size(), Meta.runs_in(Game.scenario.ID), _kills_text("   %s this life: %d")], UI.FS_BODY, oc_dim))
 	if Meta.known_clue_list(Game.scenario.ID).size() < Game.scenario.CLUES.size():

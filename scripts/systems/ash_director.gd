@@ -122,7 +122,7 @@ func _warnings() -> void:
 		if lvl == 1:
 			Game.say("You can taste grit in the air. Ash is getting in somewhere.", "warn")
 		else:
-			var hint := " Put on a mask [4]." if Game.masks > 0 and Game.mask_left <= 0.0 else ""
+			var hint := " Put on a mask [%s]." % Game.glyph("mask") if Game.masks > 0 and Game.mask_left <= 0.0 else ""
 			Game.say("Your throat burns with every breath. The air in here is hurting you.%s" % hint, "danger")
 	if lvl < _air_warned and air > 88.0:
 		_air_warned = 0
@@ -135,7 +135,7 @@ func _warnings() -> void:
 	elif bl >= 85.0 and _load_warned < 2:
 		_load_warned = 2
 		Sfx.play("pipes_knock", Vector3(4.55, 1.2, -0.3), -2.0)
-		Game.say("The balcony door frame is groaning. Shovel the ash off before it gives! [R at the balcony door]", "danger")
+		Game.say("The balcony door frame is groaning. Shovel the ash off before it gives! [%s at the balcony door]" % Game.glyph("interact_alt"), "danger")
 	if bl < 50.0:
 		_load_warned = 0
 

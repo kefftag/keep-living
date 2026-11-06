@@ -194,7 +194,7 @@ static func show_scenarios(hud) -> void:
 		if reason == "":
 			reason = "In development. Coming in a future update."
 		_card(hud, u["title_jp"], u["title"], "", u["blurb"], "", reason, Callable(), false)
-	hud.overlay_box.add_child(hud._button("戻る  Back  [Esc]", hud._show_title))
+	hud.overlay_box.add_child(hud._button("戻る  Back  [%s]" % Game.glyph("back"), hud._show_title))
 	hud._fit_overlay()
 
 
@@ -259,7 +259,8 @@ static func show_settings(hud, back: Callable) -> void:
 		]],
 		["操作", "Controls", [
 			["slider", "mouse_sensitivity", "Mouse sensitivity", 0.25, 3.0, 0.05, "%.2fx", 1.0],
-			["toggle", "invert_y", "Invert mouse Y"],
+			["slider", "stick_sensitivity", "Gamepad look speed", 0.25, 3.0, 0.05, "%.2fx", 1.0],
+			["toggle", "invert_y", "Invert look Y (mouse and stick)"],
 		]],
 		["画面", "Display", [
 			["slider", "fov", "Field of view", 60.0, 100.0, 1.0, "%d°", 1.0],
@@ -290,7 +291,7 @@ static func show_settings(hud, back: Callable) -> void:
 				grid.add_child(_toggle(hud, item[1]))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	row.add_child(hud._button("戻る  Back  [Esc]", back))
+	row.add_child(hud._button("戻る  Back  [%s]" % Game.glyph("back"), back))
 	row.add_child(hud._button("初期設定に戻す  Reset to defaults", func():
 		Settings.reset_defaults()
 		show_settings(hud, back)))
@@ -365,5 +366,5 @@ static func show_credits(hud, back: Callable) -> void:
 	box.add_child(hud._text("Models: " + ", ".join(MODEL_CREDITS) + ".", UI.FS_NOTE, hud.oc_dim))
 	box.add_child(hud._section("エンジン", "Engine"))
 	box.add_child(hud._text("Made with the Godot Engine (godotengine.org), MIT licence. © Juan Linietsky, Ariel Manzur and contributors.", UI.FS_BODY))
-	box.add_child(hud._button("戻る  Back  [Esc]", back))
+	box.add_child(hud._button("戻る  Back  [%s]" % Game.glyph("back"), back))
 	hud._fit_overlay()
