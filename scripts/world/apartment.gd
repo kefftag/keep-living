@@ -597,42 +597,95 @@ func _build_outside() -> void:
 
 # --- Lights & world --------------------------------------------------------------
 
-func _ceiling_light(p: Vector3, energy: float = 0.8, rng: float = 4.0) -> void:
+const K_NEUTRAL := Color(1.0, 0.9, 0.8)     # 昼白色 ~5000 K LED
+const K_WARM := Color(1.0, 0.82, 0.64)      # 電球色 ~2800 K (toned down: walls are warm already)
+const K_FLUO := Color(0.86, 0.96, 1.0)       # cool corridor fluorescent
+
+
+## A round LED ceiling light (シーリングライト): a shallow white housing with a
+## glowing acrylic diffuser, and a soft-shadowed light just below it.
+## The diffuser and the light go in room_lights (hidden on a power cut); the
+## housing and an unlit diffuser stay.
+func _ceiling_light(p: Vector3, energy: float = 1.0, rng: float = 4.5, tint: Color = K_NEUTRAL,
+		radius: float = 0.28) -> void:
 	var l := OmniLight3D.new()
-	l.position = p
+	l.position = Vector3(p.x, CEIL - 0.2, p.z)  # low enough to wash the ceiling a little, like the dome shade does
 	l.omni_range = rng
+	l.omni_attenuation = 1.0
 	l.light_energy = energy
-	l.light_color = Color(1.0, 0.95, 0.88)
+	l.light_color = tint
+	l.shadow_blur = 1.5  # soft edges without PCSS (light_size), which costs ~1 ms per light
+	l.shadow_enabled = true
+	l.shadow_bias = 0.04
+	l.shadow_normal_bias = 1.5
+	l.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+	l.light_specular = 0.6
 	add_child(l)
 	room_lights.append(l)
-	var fixture := MeshInstance3D.new()
+	var housing := _disc(radius + 0.02, 0.05, Props.mat(Color(0.86, 0.86, 0.85)), Vector3(p.x, CEIL - 0.025, p.z))
+	housing.mesh.top_radius = radius + 0.01
+	var off := _disc(radius, 0.04, Props.mat(Color(0.93, 0.93, 0.92)), Vector3(p.x, CEIL - 0.05, p.z))
+	off.mesh.bottom_radius = radius - 0.03
+	var lit_mat := StandardMaterial3D.new()
+	lit_mat.albedo_color = Color(1, 1, 1)
+	lit_mat.emission_enabled = true
+	lit_mat.emission = tint.lerp(Color.WHITE, 0.4)
+	lit_mat.emission_energy_multiplier = 3.0 * energy
+	lit_mat.roughness = 0.6
+	var lit := _disc(radius - 0.005, 0.045, lit_mat, Vector3(p.x, CEIL - 0.052, p.z))
+	lit.mesh.bottom_radius = radius - 0.035
+	room_lights.append(lit)
+
+
+func _disc(r: float, h: float, m: Material, at: Vector3) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.22
-	cyl.bottom_radius = 0.25
-	cyl.height = 0.08
-	fixture.mesh = cyl
-	fixture.material_override = Props.mat(Color(1.0, 0.98, 0.93), 0.8)
-	fixture.position = Vector3(p.x, CEIL - 0.04, p.z)
-	add_child(fixture)
-	room_lights.append(fixture)
+	cyl.top_radius = r
+	cyl.bottom_radius = r
+	cyl.height = h
+	cyl.radial_segments = 48
+	cyl.rings = 1
+	mi.mesh = cyl
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = at
+	add_child(mi)
+	return mi
 
 
 func _build_lights() -> void:
-	_ceiling_light(Vector3(1.36, 2.2, 1.82))         # bedroom
-	_ceiling_light(Vector3(4.55, 2.2, 1.82), 1.0, 5.0)  # living
-	_ceiling_light(Vector3(5.0, 2.2, 4.4))           # kitchen
-	_ceiling_light(Vector3(1.36, 2.2, 4.55), 0.6)    # washroom
-	_ceiling_light(Vector3(0.91, 2.2, 6.37), 0.5)    # bath
-	_ceiling_light(Vector3(2.27, 2.2, 6.37), 0.4)    # toilet
-	_ceiling_light(Vector3(3.18, 2.2, 5.0), 0.5)     # hallway
-	_ceiling_light(Vector3(3.64, 2.2, 6.82), 0.5)    # genkan
+	_ceiling_light(Vector3(1.36, 0, 1.82), 1.1, 4.5)                      # bedroom 6畳
+	_ceiling_light(Vector3(4.55, 0, 1.82), 1.4, 5.5, K_NEUTRAL, 0.32)     # living
+	_ceiling_light(Vector3(4.9, 0, 4.15), 0.9, 4.0)                      # kitchen
+	_ceiling_light(Vector3(1.36, 0, 4.55), 0.7, 3.0, K_WARM, 0.16)        # washroom
+	_ceiling_light(Vector3(0.91, 0, 6.37), 0.6, 2.6, K_WARM, 0.12)        # unit bath
+	_ceiling_light(Vector3(2.27, 0, 6.37), 0.5, 2.2, K_WARM, 0.12)        # toilet
+	_ceiling_light(Vector3(3.18, 0, 5.0), 0.6, 3.0, K_WARM, 0.14)         # hallway
+	_ceiling_light(Vector3(3.64, 0, 6.82), 0.9, 3.2, K_WARM, 0.14)        # genkan
 	var corridor := OmniLight3D.new()
-	corridor.position = Vector3(5.5, 2.25, 8.0)
-	corridor.omni_range = 6.0
-	corridor.light_energy = 0.7
-	corridor.light_color = Color(0.85, 0.95, 1.0)
+	corridor.position = Vector3(5.5, CEIL - 0.2, 8.0)
+	corridor.omni_range = 7.0
+	corridor.light_energy = 1.0
+	corridor.light_color = K_FLUO
+	corridor.shadow_enabled = true
+	corridor.shadow_blur = 1.5
 	add_child(corridor)
 	room_lights.append(corridor)
+	var tube_mat := StandardMaterial3D.new()
+	tube_mat.albedo_color = Color.WHITE
+	tube_mat.emission_enabled = true
+	tube_mat.emission = K_FLUO
+	tube_mat.emission_energy_multiplier = 4.0
+	var tube := Props.box(Vector3(1.2, 0.05, 0.1), Color.WHITE, Vector3(5.5, CEIL - 0.03, 8.0))
+	tube.material_override = tube_mat
+	tube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(tube)
+	room_lights.append(tube)
+
+
+## Kept for callers from the lighting rig: re-capture the per-room probes.
+func refresh_probes() -> void:
+	_recapture_probes()
 
 
 func _build_skyline() -> void:

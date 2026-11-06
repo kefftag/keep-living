@@ -114,6 +114,7 @@ func _build() -> void:
 				var px := (-0.25 + 0.5 * i) * (w - 0.1)
 				var pane := Props.box(Vector3((w - 0.1) * 0.5, h - 0.1, 0.006), Color.WHITE, Vector3(px, sill + h * 0.5, -0.02 + 0.03 * i))
 				pane.material_override = Props.glass(style == "barred")
+				pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # glass lets the sun in
 				visual.add_child(pane)
 				panes.append(pane)
 				# Sash stiles and rails around each pane, and a crescent lock on the meeting stile.
@@ -285,3 +286,16 @@ func perform(alt: bool) -> void:
 		Game.say("The %s is stronger now (level %d)." % [display_name.to_lower(), level], "good")
 	_refresh_visual()
 	Game.stats_changed.emit()
+
+
+## Float glass: almost no diffuse, sharp reflections (from the probes / SSR).
+static func _clear_glass() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	# Premultiplied: the reflection keeps full strength (at night the pane mirrors
+	# the lit room) while the dark, low-alpha body barely tints the view.
+	m.albedo_color = Color(0.03, 0.035, 0.035, 0.08)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_PREMULT_ALPHA
+	m.roughness = 0.04
+	m.metallic_specular = 0.6
+	return m
