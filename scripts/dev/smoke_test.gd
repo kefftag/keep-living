@@ -62,6 +62,30 @@ func _pose(player, pos: Vector3, target: Vector3) -> void:
 	player.head.rotation.x = atan2(d.y, Vector2(d.x, d.z).length())
 
 
+## Extra views of materials and fittings (`--tour`, with --shots), daytime.
+func _tour(player, apt) -> void:
+	apt.doors["bath_door"].set_open(true)
+	apt.doors["toilet_door"].set_open(true)
+	await _wait(0.6)
+	for v in [
+		["t1_washroom_bath", Vector3(1.6, 0.05, 4.4), Vector3(0.9, 0.8, 6.9)],
+		["t2_washroom", Vector3(2.4, 0.05, 4.9), Vector3(0.3, 1.0, 4.2)],
+		["t3_kitchen_counter", Vector3(4.7, 0.05, 4.1), Vector3(4.8, 0.85, 5.3)],
+		["t4_toilet", Vector3(2.3, 0.05, 5.7), Vector3(2.27, 0.5, 7.2)],
+		["t5_balcony", Vector3(1.2, 0.0, -0.4), Vector3(5.5, 0.6, -1.4)],
+		["t6_skyline", Vector3(3.0, 0.0, -1.1), Vector3(3.0, -4.0, -30.0)],
+		["t7_corridor", Vector3(3.3, -0.1, 8.1), Vector3(9.5, 0.8, 7.6)],
+		["t8_floor_close", Vector3(4.5, 0.05, 1.0), Vector3(4.0, 0.0, 1.8)],
+		["t9_bedroom", Vector3(2.2, 0.05, 2.8), Vector3(0.5, 0.8, 0.5)],
+	]:
+		_pose(player, v[1], v[2])
+		await _wait(0.4)
+		await _shot(v[0])
+	apt.doors["bath_door"].set_open(false)
+	apt.doors["toilet_door"].set_open(false)
+	await _wait(0.6)
+
+
 func _run() -> void:
 	if Meta.deaths > 0:
 		_second_life()
@@ -129,6 +153,10 @@ func _run() -> void:
 	_pose(player, Vector3(3.2, 0.05, 5.2), Vector3(3.3, 0.6, 7.3))
 	await _wait(0.3)
 	await _shot("07_genkan")
+	if "--tour" in OS.get_cmdline_user_args():
+		await _tour(player, apt)
+		_pose(player, Vector3(3.2, 0.05, 5.2), Vector3(3.3, 0.6, 7.3))
+		await _wait(0.2)
 
 	# Looting and barricading.
 	var mats_before: int = Game.materials

@@ -45,8 +45,31 @@ func _ready() -> void:
 	collision_layer = LAYER_INTACT
 
 
-func _frame_box(parent: Node3D, sz: Vector3, pos: Vector3, c: Color = C_SASH) -> void:
-	parent.add_child(Props.box(sz, c, pos))
+func _frame_box(parent: Node3D, sz: Vector3, pos: Vector3, fin: String = "aluminium") -> void:
+	parent.add_child(Props.fbox(sz, fin, pos))
+
+
+## 額縁: wood trim around the inside of a window / balcony opening, and the
+## window board (窓台) on the sill. Local -Z is indoors; the wall is 0.15 thick.
+func _inner_trim(w: float, top: float) -> void:
+	var trim := Props.surface("wood_light", Color(1.0, 0.95, 0.88))
+	var face := -0.075
+	var tw := 0.05
+	var parts: Array = [
+		[Vector3(tw, top - sill + tw, 0.012), Vector3(-w * 0.5 - tw * 0.5, (sill + top + tw) * 0.5, face - 0.006)],
+		[Vector3(tw, top - sill + tw, 0.012), Vector3(w * 0.5 + tw * 0.5, (sill + top + tw) * 0.5, face - 0.006)],
+		[Vector3(w + tw * 2.0, tw, 0.012), Vector3(0, top + tw * 0.5, face - 0.006)],
+		# Reveal linings between the sash and the room.
+		[Vector3(0.006, top - sill, 0.018), Vector3(-w * 0.5 + 0.003, (sill + top) * 0.5, -0.066)],
+		[Vector3(0.006, top - sill, 0.018), Vector3(w * 0.5 - 0.003, (sill + top) * 0.5, -0.066)],
+		[Vector3(w, 0.006, 0.018), Vector3(0, top - 0.003, -0.066)],
+	]
+	if sill > 0.0:
+		parts.append([Vector3(w + 0.06, 0.02, 0.1), Vector3(0, sill - 0.01, -0.055)])
+	for p in parts:
+		var mi := Props.box(p[0], Color.WHITE, p[1])
+		mi.material_override = trim
+		visual.add_child(mi)
 
 
 func _build() -> void:
@@ -60,17 +83,23 @@ func _build() -> void:
 	match style:
 		"door":
 			# Steel apartment door (opens outward), lever, peephole, door guard, mail slot.
-			_frame_box(visual, Vector3(w, 0.05, 0.16), Vector3(0, top - 0.025, 0), Color(0.3, 0.3, 0.3))
-			var leaf := Props.box(Vector3(w - 0.06, h - 0.06, 0.05), C_STEEL_DOOR, Vector3(0, sill + h * 0.5, 0.02))
+			# Pressed-steel frame (jambs, head, sill) and a painted steel leaf.
+			_frame_box(visual, Vector3(w + 0.1, 0.06, 0.16), Vector3(0, top + 0.0, 0), "steel_painted")
+			_frame_box(visual, Vector3(0.06, h + 0.03, 0.16), Vector3(-w * 0.5 - 0.0, sill + h * 0.5, 0), "steel_painted")
+			_frame_box(visual, Vector3(0.06, h + 0.03, 0.16), Vector3(w * 0.5 + 0.0, sill + h * 0.5, 0), "steel_painted")
+			_frame_box(visual, Vector3(w, 0.02, 0.16), Vector3(0, sill + 0.01, 0), "aluminium_dark")
+			var leaf := Props.fbox(Vector3(w - 0.06, h - 0.06, 0.05), "steel_painted", Vector3(0, sill + h * 0.5, 0.02))
 			visual.add_child(leaf)
 			panes.append(leaf)
 			for part in [
-				[Vector3(0.14, 0.025, 0.03), Vector3(-w * 0.5 + 0.13, 1.0, -0.03), Color(0.75, 0.75, 0.75)],  # lever
-				[Vector3(0.03, 0.03, 0.02), Vector3(0, 1.48, -0.01), Color(0.1, 0.1, 0.1)],                  # peephole
-				[Vector3(0.05, 0.22, 0.03), Vector3(-w * 0.5 + 0.06, 1.35, -0.03), Color(0.7, 0.7, 0.72)],     # door guard
-				[Vector3(0.28, 0.06, 0.02), Vector3(0, 0.75, -0.01), Color(0.2, 0.2, 0.2)],                  # mail slot
+				[Vector3(0.14, 0.025, 0.03), Vector3(-w * 0.5 + 0.13, 1.0, -0.03), "stainless"],      # lever
+				[Vector3(0.07, 0.3, 0.012), Vector3(-w * 0.5 + 0.08, 1.0, -0.006), "stainless"],      # escutcheon plate
+				[Vector3(0.05, 0.05, 0.03), Vector3(-w * 0.5 + 0.08, 1.2, -0.02), "stainless"],       # thumb-turn
+				[Vector3(0.03, 0.03, 0.02), Vector3(0, 1.48, -0.01), "chrome"],                       # peephole
+				[Vector3(0.05, 0.22, 0.03), Vector3(-w * 0.5 + 0.06, 1.35, -0.03), "stainless"],      # door guard
+				[Vector3(0.3, 0.08, 0.02), Vector3(0, 0.75, -0.01), "aluminium_dark"],                 # mail slot
 			]:
-				var m := Props.box(part[0], part[2], part[1])
+				var m := Props.fbox(part[0], part[2], part[1])
 				leaf.add_child(m)
 				m.position -= leaf.position
 		"balcony", "window", "barred":
@@ -79,21 +108,28 @@ func _build() -> void:
 			_frame_box(visual, Vector3(w, 0.05, 0.12), Vector3(0, top - 0.025, 0))
 			_frame_box(visual, Vector3(0.05, h, 0.12), Vector3(-w * 0.5 + 0.025, sill + h * 0.5, 0))
 			_frame_box(visual, Vector3(0.05, h, 0.12), Vector3(w * 0.5 - 0.025, sill + h * 0.5, 0))
-			var glass_c := C_FROSTED if style == "barred" else C_GLASS
+			if style != "barred":
+				_inner_trim(w, top)
 			for i in 2:
 				var px := (-0.25 + 0.5 * i) * (w - 0.1)
-				var pane := Props.box(Vector3((w - 0.1) * 0.5, h - 0.1, 0.012), glass_c, Vector3(px, sill + h * 0.5, -0.02 + 0.03 * i))
+				var pane := Props.box(Vector3((w - 0.1) * 0.5, h - 0.1, 0.006), Color.WHITE, Vector3(px, sill + h * 0.5, -0.02 + 0.03 * i))
+				pane.material_override = Props.glass(style == "barred")
 				visual.add_child(pane)
 				panes.append(pane)
+				# Sash stiles and rails around each pane, and a crescent lock on the meeting stile.
 				_frame_box(pane, Vector3(0.03, h - 0.1, 0.03), Vector3((w - 0.1) * 0.25 - 0.015, 0, 0))
 				_frame_box(pane, Vector3(0.03, h - 0.1, 0.03), Vector3(-(w - 0.1) * 0.25 + 0.015, 0, 0))
+				_frame_box(pane, Vector3((w - 0.1) * 0.5, 0.035, 0.03), Vector3(0, (h - 0.1) * 0.5 - 0.0175, 0))
+				_frame_box(pane, Vector3((w - 0.1) * 0.5, 0.045, 0.03), Vector3(0, -(h - 0.1) * 0.5 + 0.0225, 0))
+				if i == 0 and h > 0.5:
+					_frame_box(pane, Vector3(0.025, 0.06, 0.02), Vector3((w - 0.1) * 0.25 - 0.015, 0.0, -0.025), "aluminium_dark")
 			if style == "barred":
 				# 面格子: the iron grille outside a corridor-facing bathroom window.
 				for i in 7:
 					var bx := -w * 0.5 + 0.06 + (w - 0.12) * float(i) / 6.0
-					_frame_box(visual, Vector3(0.025, h + 0.1, 0.025), Vector3(bx, sill + h * 0.5, 0.14), Color(0.25, 0.25, 0.27))
-				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, sill + 0.02, 0.14), Color(0.25, 0.25, 0.27))
-				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, top - 0.02, 0.14), Color(0.25, 0.25, 0.27))
+					_frame_box(visual, Vector3(0.025, h + 0.1, 0.025), Vector3(bx, sill + h * 0.5, 0.14))
+				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, sill + 0.02, 0.14))
+				_frame_box(visual, Vector3(w + 0.1, 0.03, 0.04), Vector3(0, top - 0.02, 0.14))
 	# Broken glass / a bent door, shown once breached.
 	shards = Node3D.new()
 	shards.visible = false
@@ -102,8 +138,8 @@ func _build() -> void:
 	rng.seed = hash(point_id)
 	for i in 6:
 		var shard := Props.box(Vector3(rng.randf_range(0.05, 0.2), rng.randf_range(0.1, 0.35), 0.01),
-			C_STEEL_DOOR if style == "door" else C_GLASS,
-			Vector3(rng.randf_range(-w * 0.45, w * 0.45), sill + rng.randf_range(0.0, h), rng.randf_range(-0.03, 0.03)))
+			Color.WHITE, Vector3(rng.randf_range(-w * 0.45, w * 0.45), sill + rng.randf_range(0.0, h), rng.randf_range(-0.03, 0.03)))
+		shard.material_override = Props.finish("steel_painted") if style == "door" else Props.glass(style == "barred")
 		shard.rotation.z = rng.randf_range(-1.0, 1.0)
 		shards.add_child(shard)
 	# Boards nailed across the inside face, 2 per reinforcement level.
