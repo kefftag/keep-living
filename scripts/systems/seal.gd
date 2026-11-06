@@ -153,8 +153,8 @@ func get_hold_sound(o: Node, alt: bool) -> String:
 	if _broken(o) or (alt and _id(o) == "front_door" and not Game.looters_active):
 		return "hammer"
 	if alt and _id(o) == "balcony_door":
-		return "rummage"
-	return ""
+		return "shovel"
+	return "tape"
 
 
 func get_noise(o: Node, alt: bool) -> float:

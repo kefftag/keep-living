@@ -371,9 +371,59 @@ def misc():
     save("ui_click", bandpass(noise(0.03), 1000, 6000) * env_exp(int(0.03 * SR), 0.005), 0.4)
 
 
+def ash():
+    """Ash scenario: coughs, a crowbar in the door gap, tape, shovel, the bus."""
+    # Coughs: a short voiced burst followed by a noisy expulsion, x2-3.
+    for i in range(3):
+        r = np.random.default_rng(40 + i)
+        y = np.zeros(int(1.4 * SR))
+        at = 0.0
+        for k in range(2 + i % 2):
+            burst = groan_voice(0.08, 180 + 20 * k, 140, "a", rasp=1.5, seed=50 + 3 * i + k) * 0.6
+            air = bandpass(r.standard_normal(int(0.22 * SR)), 300, 3500) * env_exp(int(0.22 * SR), 0.06)
+            air += lowpass(r.standard_normal(int(0.22 * SR)), 250) * env_exp(int(0.22 * SR), 0.04) * 0.8
+            place(y, burst, at)
+            place(y, air, at + 0.05)
+            at += r.uniform(0.28, 0.4)
+        save("cough_%d" % i, y, 0.7)
+    # Crowbar: metal levering in a door gap, creak + grinding squeal + thud.
+    for i in range(2):
+        d = 1.6
+        tt = t(d)
+        f = 900 + 400 * np.sin(2 * np.pi * (0.6 + 0.2 * i) * tt) + 60 * np.sin(2 * np.pi * 23 * tt)
+        squeal = np.sin(2 * np.pi * np.cumsum(f) / SR) * bandpass(noise(d), 500, 4000) * 0.6
+        squeal *= adsr(len(tt), 0.2, 0.3, 0.6, 0.4)
+        y = squeal + resonator(d, [140, 380, 1250], [0.2, 0.1, 0.05], [1, 0.5, 0.3]) * 0.8
+        place(y, lowpass(noise(0.2), 300) * env_exp(int(0.2 * SR), 0.05) * 1.5, 1.2)
+        save("crowbar_%d" % i, y, 0.8)
+    # Tape: a fast rip of a packing-tape roll.
+    for i in range(2):
+        d = 0.7
+        tt = t(d)
+        rip = bandpass(noise(d), 1500, 9000) * (1 + 0.8 * np.sign(np.sin(2 * np.pi * (60 + 30 * i) * tt)))
+        save("tape_%d" % i, rip * adsr(len(tt), 0.02, 0.1, 0.8, 0.15), 0.5)
+    # Shovel in wet ash: a gritty scrape and a dump.
+    d = 1.3
+    scrape = bandpass(noise(d), 200, 3000) * adsr(int(d * SR), 0.1, 0.2, 0.7, 0.3)
+    scrape *= 1 + 0.5 * np.sin(2 * np.pi * 9 * t(d))
+    place(scrape, lowpass(noise(0.4), 250) * env_exp(int(0.4 * SR), 0.12) * 1.5, 0.9)
+    save("shovel", scrape, 0.7)
+    # Evacuation bus: a diesel idle with two horn blasts (major third, like a Japanese bus).
+    d = 4.0
+    tt = t(d)
+    diesel = lowpass(noise(d), 150) * (1 + 0.5 * np.sin(2 * np.pi * 28 * tt)) * 0.6
+    y = diesel.copy()
+    for at in (1.0, 1.9):
+        h = int(0.6 * SR)
+        th = np.arange(h) / SR
+        horn = (np.sign(np.sin(2 * np.pi * 330 * th)) + 0.8 * np.sign(np.sin(2 * np.pi * 415 * th))) * 0.3
+        place(y, lowpass(horn, 2500) * adsr(h, 0.03, 0.05, 0.9, 0.1), at)
+    save("bus", y * np.minimum(1, tt / 0.8), 0.8)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for fn in (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc):
+    for fn in (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc, ash):
         fn()
         print("made", fn.__name__)
 

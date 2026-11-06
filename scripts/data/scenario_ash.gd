@@ -81,7 +81,7 @@ const DAWN_MESSAGE := "Dawn. Day %d. The light comes up brown and dim."
 const RESCUE_JP := "避難"
 const RESCUE_EN := "EVACUATED"
 const RESCUE_TEXT := "Dawn, day %d. A Toei bus with taped-over vents grinds through the grey drifts below, headlights on at sunrise. Figures in masks wave you down to it.\n\nYou kept living."
-const RESCUE_SOUND := ""
+const RESCUE_SOUND := "bus"
 const KILLS_LABEL := ""
 const DEATHS := {
 	"starvation": "Starvation. The cupboards were empty long before the bus came.",

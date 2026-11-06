@@ -56,7 +56,7 @@ func begin_attempt() -> void:
 	_left = s.LOOTER_SECONDS
 	_dps = s.LOOTER_DPS_BASE + s.LOOTER_DPS_PER_NIGHT * Game.day
 	_taunt_t = 6.0
-	Sfx.play("bang_door", door.global_position + Vector3(0, 1.2, 0.3), -2.0)
+	Sfx.play("crowbar", door.global_position + Vector3(0, 1.2, 0.3), 0.0)
 	Game.say("Footsteps in the corridor. Someone tries 304's handle, then yours. Metal scrapes into the gap of your front door.", "danger")
 
 
@@ -74,6 +74,7 @@ func _process(delta: float) -> void:
 	_taunt_t -= delta
 	if _taunt_t <= 0.0 and Game.looters_active:
 		_taunt_t = randf_range(12.0, 18.0)
+		Sfx.play("crowbar", door.global_position + Vector3(0, 1.2, 0.3), 0.0)
 		Game.say(["\"Anyone in there? We just want water!\"", "\"Come on, we've got kids out here.\"", "The bar bites deeper. The door frame creaks.", "\"Get it open before someone comes.\""].pick_random(), "warn")
 	if _left <= 0.0 and Game.looters_active:
 		_end("The scraping stops. Footsteps move off down the corridor. You hear them start on 305.")

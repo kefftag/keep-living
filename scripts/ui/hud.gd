@@ -887,6 +887,9 @@ func _refresh_seals() -> void:
 
 const CAPTIONS := {
 	"bang_door": "Banging on the front door",
+	"crowbar": "Metal grinding in the door frame",
+	"cough": "You cough",
+	"bus": "A bus horn",
 	"bang_glass": "Something hammering on glass",
 	"door_break": "The door splinters",
 	"glass_break": "Glass shatters",

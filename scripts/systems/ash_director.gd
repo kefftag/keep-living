@@ -250,4 +250,5 @@ func _process(delta: float) -> void:
 		_cough_t -= delta
 		if _cough_t <= 0.0:
 			_cough_t = randf_range(14.0, 26.0)
+			Sfx.play("cough", null, -4.0, 0.1)
 			Game.say(["You cough. It tastes like a building site.", "Your eyes sting. Everything has a grey film on it.", "A coughing fit doubles you over."].pick_random(), "warn")
