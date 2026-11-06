@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://parmc4c2fec6"
-path="res://.godot/imported/fp_fist_realistic_office_worker_3d_model_basecolor.jpg-b1cbb1b053e85317b783ef6130a42c85.ctex"
+uid="uid://bd4qyc2f6h0xf"
+path="res://.godot/imported/fp_fist_fp_hand_rm.jpg-a691f29732d5a7347778eace9c17ad44.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "40a414f01ea0f08790a4c8fdb5f407e7"
+"md5": "7905ab36570df42c51dea1da1b70692b"
 }
 
 [deps]
 
-source_file="res://assets/models/fp_fist_realistic_office_worker_3d_model_basecolor.jpg"
-dest_files=["res://.godot/imported/fp_fist_realistic_office_worker_3d_model_basecolor.jpg-b1cbb1b053e85317b783ef6130a42c85.ctex"]
+source_file="res://assets/models/fp_fist_fp_hand_rm.jpg"
+dest_files=["res://.godot/imported/fp_fist_fp_hand_rm.jpg-a691f29732d5a7347778eace9c17ad44.ctex"]
 
 [params]
 
