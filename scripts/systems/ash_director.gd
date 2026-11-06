@@ -63,7 +63,7 @@ func _on_quake(strength: float) -> void:
 		return
 	var peeled: Array = seal.peel(Game.rng, 2 if strength >= 1.0 else 1)
 	for id in peeled:
-		Game.say("The shaking tore the tape loose on the %s." % seal.name_of(id).to_lower(), "warn")
+		Game.say("The shaking tore the tape loose on the %s." % seal.lc(seal.name_of(id)), "warn")
 	Game.leak = seal.total_leak()
 
 

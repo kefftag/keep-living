@@ -82,6 +82,13 @@ func name_of(id: String) -> String:
 	return nodes[id].display_name if nodes.has(id) else id
 
 
+## "LDK air vent" stays as it is, "Balcony door" becomes "balcony door".
+static func lc(name: String) -> String:
+	if name.length() > 1 and name[1] == name[1].to_upper() and name[1] != " ":
+		return name
+	return name[0].to_lower() + name.substr(1)
+
+
 # --- Interactable calls ------------------------------------------------------
 
 func get_prompt(o: Node, alt: bool) -> String:
@@ -167,7 +174,7 @@ func perform(o: Node, alt: bool) -> void:
 		o.max_hp = o.base_hp
 		o.level = 0
 		levels[id] = 1
-		Game.say("You board over the %s and tape sheeting across it." % o.display_name.to_lower(), "good")
+		Game.say("You board over the %s and tape sheeting across it." % lc(o.display_name), "good")
 		o._refresh_visual()
 	elif alt:
 		if id == "front_door" and Game.looters_active:
@@ -194,9 +201,9 @@ func perform(o: Node, alt: bool) -> void:
 			return
 		levels[id] = lvl + 1
 		if lvl == 0:
-			Game.say("You run tape around every edge of the %s." % o.display_name.to_lower(), "good")
+			Game.say("You run tape around every edge of the %s." % lc(o.display_name), "good")
 		else:
-			Game.say("You tape plastic sheeting over the %s. Hardly anything gets past it now." % o.display_name.to_lower(), "good")
+			Game.say("You tape plastic sheeting over the %s. Hardly anything gets past it now." % lc(o.display_name), "good")
 	_refresh_visual(o)
 	Game.stats_changed.emit()
 
@@ -205,7 +212,7 @@ func on_breached(o: Node) -> void:
 	if _id(o) == "front_door":
 		Game.say("The front door bursts open!", "danger")
 	else:
-		Game.say("The %s gives way! Ash is pouring in!" % o.display_name.to_lower(), "danger")
+		Game.say("The %s gives way! Ash is pouring in!" % lc(o.display_name), "danger")
 	levels[_id(o)] = 0
 	_refresh_visual(o)
 

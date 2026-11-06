@@ -146,7 +146,7 @@ static func build_theme() -> Theme:
 	t.set_color("font_color", "Label", PAPER)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.85))
 	t.set_constant("outline_size", "Label", 5)
-	t.set_constant("line_spacing", "Label", 2)
+	t.set_constant("line_spacing", "Label", 5)  # room for descenders and underscores
 
 	t.set_font("normal_font", "RichTextLabel", ui_font())
 	t.set_font("bold_font", "RichTextLabel", bold_font())

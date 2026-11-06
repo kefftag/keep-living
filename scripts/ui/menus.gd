@@ -29,6 +29,7 @@ const MODEL_CREDITS := [
 static func show_title(hud) -> void:
 	hud.overlay.visible = false
 	hud.overlay_kind = "title"
+	hud._set_front_end(true)
 	hud.get_tree().paused = true
 	hud._capture_mouse(false)
 	_pose_camera(hud)
@@ -229,6 +230,7 @@ static func _card(hud, jp: String, en: String, tagline: String, blurb: String, r
 	if tagline != "":
 		v.add_child(hud._label(tagline, UI.FS_NOTE, hud.oc_accent))
 	var bl: Label = hud._text(blurb, UI.FS_BODY, hud.oc_text if lock == "" else hud.oc_dim)
+	bl.add_theme_constant_override("line_spacing", 6)
 	bl.custom_minimum_size = Vector2(580, 0)
 	v.add_child(bl)
 	if rec != "":

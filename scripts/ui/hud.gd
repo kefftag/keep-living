@@ -77,7 +77,8 @@ const HINTS := [
 	["use", ["E", "R"], "hold to use", ["interact", "interact_alt"]],
 	["attack", ["LMB"], "swing", ["attack"]],
 	["flashlight", ["F"], "phone light", ["flashlight"]],
-	["items", ["1", "2", "3"], "eat · drink · first aid", ["eat", "drink", "medkit"]],
+	["items", ["1", "2", "3"], "eat · drink · heal", ["eat", "drink", "medkit"]],
+	["mask", ["4"], "mask", ["mask"]],
 	["journal", ["J"], "journal", ["journal"]],
 	["pause", ["Esc"], "menu", ["pause"]],
 ]
@@ -451,7 +452,7 @@ func _build_help() -> void:
 	root.add_child(hint_bar)
 	for h in HINTS:
 		var id: String = h[0]
-		if _hint_uses.get(id, 0) >= HINT_USES:
+		if _hint_uses.get(id, 0) >= HINT_USES or (id == "mask" and not seal_mode):
 			continue
 		var chip := PanelContainer.new()
 		chip.add_theme_stylebox_override("panel", UI.chip_box())
@@ -682,8 +683,8 @@ func _process(delta: float) -> void:
 	if seal_mode:
 		_refresh_air()
 		var mask := "Mask on: %dh %02dm" % [int(Game.mask_left / 60.0), int(Game.mask_left) % 60] if Game.mask_left > 0.0 else "No mask on"
-		inv_label.text = "Food %d   Water %d   First aid %d   Masks %d\nMaterials %d   %s   %s" % [
-			Game.food, Game.water, Game.medkits, Game.masks, Game.materials, "Metal bat" if Game.has_weapon else "Bare hands", mask]
+		inv_label.text = "Food %d   Water %d   First aid %d\nMaterials %d   Masks %d   %s\n%s" % [
+			Game.food, Game.water, Game.medkits, Game.materials, Game.masks, "Metal bat" if Game.has_weapon else "Bare hands", mask]
 	else:
 		inv_label.text = "Food %d   Water %d   First aid %d\nMaterials %d   %s" % [
 			Game.food, Game.water, Game.medkits, Game.materials, "Metal bat" if Game.has_weapon else "Bare hands"]
@@ -814,8 +815,10 @@ func _refresh_air() -> void:
 	if tier != _air_fill:
 		_air_fill = tier
 		air_bar.add_theme_stylebox_override("fill", UI.bar_box([UI.BAR_AIR, UI.SIGN_YELLOW, UI.BAR_HEALTH][tier]))
-	haze.visible = Game.dust > 2.0
-	haze.color.a = clamp(Game.dust / 100.0, 0.0, 1.0) * 0.32
+	# A brown cast while ash falls outside, greying further as it gets in.
+	var a: float = (0.07 if Game.ash_falling else 0.0) + clamp(Game.dust / 100.0, 0.0, 1.0) * 0.28
+	haze.visible = a > 0.01
+	haze.color = Color(UI.ASH_GREY.lerp(Color("#7A5C3A"), 0.35 if Game.dust < 30.0 else 0.0), a)
 
 
 func _ash_info() -> Array:
@@ -1409,6 +1412,7 @@ func _title_play(id: String) -> void:
 	Game.select_scenario(id)
 	Game.show_title = false
 	Menus.hide_title(self)
+	_set_front_end(false)
 	if id != _built_scenario:
 		_restart()
 		return
@@ -1420,6 +1424,15 @@ func _title_play(id: String) -> void:
 func _go_title() -> void:
 	Game.show_title = true
 	_restart()
+
+
+## Title / menus before a run: hide the HUD widgets and the hands.
+func _set_front_end(on: bool) -> void:
+	for c in root.get_children():
+		if c != overlay and c != title_root:
+			c.modulate.a = 0.0 if on else 1.0
+	if player and player.get("viewmodel"):
+		player.viewmodel.visible = not on
 
 
 func _kills_text(fmt: String) -> String:

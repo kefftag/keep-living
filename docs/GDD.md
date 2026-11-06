@@ -146,18 +146,87 @@ Fully reinforcing all four entrances costs 36. You can't do everything, so
 choosing what to fortify, what to dismantle and what to leave is the core
 decision. The metal bat is hidden in one of three containers each run.
 
-## Scenarios (roadmap)
+## Scenarios
 Each scenario reuses the apartment and systems but changes the threat, the
-clue set, the hazards and the theory answer. Ideas to discuss:
+clue set, the hazards and the theory answer.
+
+**How it works.** `Game.scenario` is a script from `scripts/data/scenarios.gd`,
+picked on the title screen or scenario select before a run, and remembered
+(`Meta.last_scenario`). Everything scenario-specific is data on it: clues,
+insights, theories, nights to survive, intro / night / dawn / rescue / death
+text, the event timeline (`roll_events`), the tonight-plan, and `DIRECTORS`,
+the systems `scripts/systems/scenario_world.gd` builds for the run. The same
+file rewires the shared apartment through `CLUE_SOURCES` (what the phone, TV,
+radio, laptop, mail and binoculars say) and `LOOT` (container contents), so
+`apartment.gd` stays scenario-agnostic. A scenario with a different id from
+the one the world was built for reloads the scene. Clues, theory, lives, best
+day, rescues and last death are kept per scenario (`Meta.records`); Echoes are
+shared. `UNLOCK_AFTER_WIN` gates a scenario behind a rescue in another one.
 
 - **Outbreak** (built): infected, sound-driven, nightly sieges.
-- **Ash:** an eruption (Fuji?) or fallout. The threat is the *air*: seal gaps
-  with tape, rationed filters, contaminated water, and looters at the door.
-  Answer: radiation / eruption.
+- **Ash** (built, below).
+- **Static** and **Tide** show locked on the scenario select ("unlocks after
+  your first rescue in Outbreak").
+
+### Ash (降灰)
+Mt Fuji erupts at 07:41 on day 1. Tokyo is 100 km downwind. Survive 5 days;
+an evacuation bus comes at dawn on day 6. Core decisions move from
+"reinforce" to **seal and ration**.
+
+- **Ashfall** starts at 10:00 on day 1. Each day has a JMA-style forecast
+  (少量 light 0.45 on day 1; days 2-4 a shuffle of 1.15 / 0.95 / 0.65; 0.35 on
+  day 5). Ash depth and balcony load build with it.
+- **Seal points:** the four entrances (same ids) plus the LDK and bedroom
+  24-hour vents (給気口) and the range-hood duct. Leak weights: balcony door
+  1.6, range hood 1.2, front door 1.0, LDK vent 1.0, bedroom window 0.9,
+  bedroom vent 0.8, bath window 0.5 (7.0 total). E tapes a gap (1 material,
+  ×0.35 leak), then plastic sheeting (2 materials, ×0.08). A smashed or forced
+  opening leaks ×2.5 until boarded over (3 materials). Sealing everything
+  fully costs 21 of the ~16 materials in a run.
+- **Air:** indoor dust follows `d/dt = 0.16 · ashfall · leak − 0.012 · dust`.
+  Below air quality 65, breathing costs up to 0.15 HP per game minute (scaled
+  by how bad it is), also while resting. Unsealed on a heavy day the air
+  settles around 25; everything taped once around 65.
+- **Masks** (key 4): DS2 masks block 80% of the harm for 6 game hours. Found
+  in the emergency bag (2), washbasin cabinet, bedroom closet.
+- **Water** from the tap turns grey and undrinkable at 06:00 on day 2; fill
+  the bath before. **Power** fails at 15:00 on day 2 (wet ash on the lines).
+- **Balcony:** load grows with ashfall (×2.5 while it rains: 13:00-19:00 on
+  day 3 or 4). At 100% the balcony door gives way (40 damage if you're near).
+  R at the balcony door shovels it clear, but peels a level of tape and lets
+  ash in (wear a mask).
+- **Tremors** (day 1 afternoon, day 3, night 4) topple furniture and gas as
+  in Outbreak, and shake tape loose from 1-2 seals.
+- **Looters** on two nights (one of 2-3, one of 4-5), after midnight: they
+  work a bar into the front door for 60 s at 3 + 0.8·night damage/s. R:
+  brace the door (+100, 2/3/4 materials) by day; shout at them during an
+  attempt (75% they leave with the bat, 30% without, otherwise they push
+  harder). A forced door costs half your supplies (a quarter with the bat)
+  and 35 HP (15).
+- **Clues:** J-ALERT eruption push, NHK broadcast with the 噴火警戒レベル5
+  banner and ticker, building management notice about the roof water tank,
+  ward ashfall leaflet, looping radio on wet ash, the view from the balcony,
+  Tanaka's note about looters, a Lawson receipt, the ward evacuation page.
+- **Insights:** ash forecast, tap-water time, Prepared (gaps flagged), rain
+  time + balcony load, per-gap leak readout, looter nights, the konbini bag
+  (+2 masks, +1 material each life), evacuation-bus countdown.
+- **Theory:** "The mountain. Fuji has erupted." Solved: masks last 50% longer.
+- **Deaths:** ash in the lungs (unsealed / in your sleep), looters, the
+  balcony door, dehydration (the grey tap), starvation.
 - **Static:** a signal from the sky. Screens and radios are dangerous to use,
   neighbours act strangely, and clues contradict each other.
 - **Tide:** a flood or tsunami. The rising water makes the balcony and roof the
   goal, you move valuables upward, and the building groans.
+
+## Front end
+Boot shows the title (生きていく / KEEP LIVING over the live apartment):
+Continue / New life in the last scenario, Scenario select, Settings, Credits,
+Quit. Settings persist in `user://settings.cfg` (`scripts/autoload/settings.gd`):
+master / music-and-ambience / SFX volume, mouse sensitivity, invert Y, FOV,
+fullscreen, 3D resolution scale, V-Sync, reduce camera shake, subtitles for
+important sounds (with left / right / behind), large text. The pause menu has
+Settings and "Title screen". After a death or rescue the next life starts on
+the intro card; the title only comes back on boot or when asked for.
 
 ## Open questions / next steps
 - **Audio** is the biggest missing piece: knocking, groans, the early-warning
