@@ -5,6 +5,8 @@ extends Node
 ##   godot -- --smoke-test --shots=/some/dir
 ## Prints "SMOKE OK" and exits 0 on success, exits 1 on the first failure.
 
+const Scenarios := preload("res://scripts/data/scenarios.gd")
+
 var main: Node
 var _shots_dir := ""
 var _failed := false
@@ -103,6 +105,12 @@ func _run() -> void:
 			return
 		3:
 			_ash_second_life()
+			return
+		4:
+			_tide_life()
+			return
+		5:
+			_tide_second_life()
 			return
 	print("SMOKE: start (runs so far: %d)" % Meta.runs)
 	var hud = main.hud
@@ -338,6 +346,17 @@ func _second_life() -> void:
 func _front_end(hud) -> void:
 	_check(hud.overlay_kind == "title", "title screen is shown at boot")
 	_check(get_tree().paused, "the world waits behind the title")
+	_check(Scenarios.lock_reason(Scenarios.TIDE.UNLOCK_AFTER_WIN) != "", "Tide is locked before any rescue")
+	var pad_ok := true
+	for action in ["move_up", "move_down", "move_left", "move_right", "look_left", "look_up", "interact", "interact_alt",
+			"attack", "flashlight", "eat", "drink", "medkit", "mask", "journal", "pause", "sneak_toggle"]:
+		var has_pad := false
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventJoypadButton or ev is InputEventJoypadMotion:
+				has_pad = true
+		pad_ok = pad_ok and has_pad
+	_check(pad_ok, "every action has a gamepad binding")
+	_check(get_viewport().gui_get_focus_owner() is Button, "the title menu has gamepad focus")
 	await _shot("00_title")
 	hud._show_scenarios()
 	await _wait(0.3)
@@ -527,6 +546,279 @@ func _ash_second_life() -> void:
 	_check(hud.overlay_kind == "end", "Ash death screen is shown")
 	_check("lungs" in str(Meta.last_death_in("ash").get("cause", "")), "the death is recorded for Ash")
 	await _shot("25_ash_death")
+	_check(Scenarios.lock_reason(Scenarios.TIDE.UNLOCK_AFTER_WIN) == "", "a rescue in Ash unlocks Tide")
+	if _failed:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	await _wait(0.3)
+	hud._show_scenarios()
+	await _wait(0.4)
+	await _shot("26_scenarios_tide_unlocked")
+	print("SMOKE: switching to Tide...")
+	hud._title_play("tide")
+
+
+# --- Tide --------------------------------------------------------------------------
+
+func _tide_life() -> void:
+	print("SMOKE: Tide")
+	var hud = main.hud
+	var player = main.player
+	var apt = main.apartment
+	await _wait(0.5)
+	_check(Game.scenario.ID == "tide", "Tide is the active scenario")
+	_check(hud.overlay_kind == "intro", "Tide opens on its intro card")
+	await _shot("30_tide_intro")
+	hud._start_run()
+	await _wait(0.3)
+	var tide = main.get_node_or_null("TideDirector")
+	_check(tide != null and main.get_node_or_null("NightDirector") == null, "Tide runs its own director, not the night siege")
+	if tide == null:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	var guard = tide.guard
+	_check(guard.nodes.size() == 4 and apt.barricades["balcony_door"].mode_handler == guard, "the entrances became storm points")
+	_check(hud.battery_row.visible and not hud.air_row.visible, "the HUD shows the phone battery")
+	_check(Game.nights_goal() == 4, "rescue comes after 4 nights")
+
+	# The phone: alerts cost battery, and it charges while plugged in.
+	var phone = apt.nav_region.get_node("phone")
+	var b0: float = Game.phone_battery
+	phone.perform(false)
+	_check(Meta.knows_clue("tide", "jalert") and Game.phone_battery < b0, "the evacuation alert costs battery (%d%% -> %d%%)" % [int(b0), int(Game.phone_battery)])
+	await _wait(0.2)
+	await _shot("30b_tide_alert")
+	hud._close()
+	_check(phone.get_prompt(true) != "", "the phone can be plugged in")
+	phone.perform(true)
+	var b1: float = Game.phone_battery
+	Game.advance_minutes(60)
+	_check(Game.phone_plugged and Game.phone_battery > b1 + 10.0, "plugged in, the phone charges (%d%%)" % int(Game.phone_battery))
+	apt.nav_region.get_node("tv").perform(false)
+	hud._close()
+	_check(Game.has_insight("storm_forecast"), "the NHK broadcast gives the storm forecast")
+	apt.nav_region.get_node("fridge").perform(false)
+	await _wait(0.1)
+	hud._close()
+	_check(Meta.knows_clue("tide", "hazard_map"), "the hazard map is on the fridge")
+	apt.nav_region.get_node("emergency_bag").perform(false)
+	await _wait(0.1)
+	hud._close()
+	_check(Game.has_crank and Game.has_insight("prepared_storm"), "the emergency bag has the crank charger and the typhoon leaflet")
+	await _wait(0.1)
+	_check("Wind" in hud.info_label.text, "the storm forecast shows on the HUD")
+
+	# Storm prep: bring the balcony things in, tape and board the glass.
+	var bal = apt.barricades["balcony_door"]
+	var bed_w = apt.barricades["bedroom_window"]
+	_check("pots" in bal.get_prompt(true), "the balcony things can be brought in")
+	bal.perform(true)
+	_check(not tide.loose_on_balcony(), "the pots and drying rack come inside")
+	Game.materials += 20
+	bed_w.perform(false)
+	_check(guard.levels["bedroom_window"] == 1 and bed_w.get_node_or_null("StormVisual") != null, "an X of tape goes on the bedroom window")
+	bal.perform(false)
+	bal.perform(false)
+	_check(guard.levels["balcony_door"] == 2, "the balcony door is taped and boarded")
+	Game.advance_minutes(14 * 60 - Game.minutes)  # 14:00, the wind is up
+	await _wait(0.6)
+	_check(Game.storm_level > 0.25, "the wind rises through day 1 (%.2f)" % Game.storm_level)
+	_pose(player, Vector3(1.4, 0.05, 2.3), Vector3(1.2, 1.2, 0.0))
+	await _wait(0.5)
+	await _shot("31_tide_taped_window")
+	_pose(player, Vector3(4.55, 0.05, 2.6), Vector3(4.55, 1.2, -0.5))
+	await _wait(0.4)
+	await _shot("32_tide_boarded_door")
+
+	# A blown-in window: flying glass and a hole to board over.
+	var hp_before: float = Game.health
+	_pose(player, Vector3(1.3, 0.05, 1.2), Vector3(1.2, 1.2, 0.0))
+	guard.levels["bedroom_window"] = 0
+	guard.hit("bedroom_window", 9999.0)
+	_check(bed_w.broken and Game.health < hp_before, "an untaped window blows in and cuts you (%d hp)" % int(hp_before - Game.health))
+	bed_w.perform(false)
+	_check(not bed_w.broken and guard.levels["bedroom_window"] == 2, "a blown-in window can be boarded over")
+	Game.heal(Game.max_health)
+
+	# Power and water.
+	Game.advance_minutes(18 * 60 + 1 - Game.minutes)
+	await _wait(0.2)
+	_check(not Game.power_on and not Game.phone_plugged, "the power fails on the first evening and the phone stops charging")
+
+	# Night 1: the peak of the storm, the surge, Tanaka at the door.
+	Game.hunger = 100.0
+	Game.thirst = 100.0
+	Game.advance_minutes(Game.NIGHT_START - Game.minutes + 1)
+	await _wait(0.2)
+	_check(Game.phase == Game.Phase.NIGHT, "night falls")
+	Game.advance_minutes(25 * 60 - Game.minutes)
+	await _wait(0.5)
+	_check(Game.storm_level > 0.9, "the storm peaks in the small hours (%.2f)" % Game.storm_level)
+	_check(Game.flood_depth > 2.0, "the surge floods the street (%.1f m)" % Game.flood_depth)
+	player.flashlight.visible = true
+	var b2: float = Game.phone_battery
+	await _wait(1.0)
+	_check(Game.phone_battery < b2, "the phone light drains the battery")
+	_pose(player, Vector3(4.2, 0.05, 2.6), Vector3(4.0, 1.4, -0.3))
+	await _wait(0.4)
+	await _shot("33_tide_night_storm")
+	player.flashlight.visible = false
+	Game.light_on = false
+
+	tide.begin_knock()
+	_check(tide.is_knocking() and apt.barricades["front_door"].get_prompt(false) != "", "Tanaka knocks, and you can answer the door")
+	apt.barricades["front_door"].perform(false)
+	await _wait(0.9)
+	_check(hud.overlay_kind == "choice", "answering the door opens the choice")
+	var focus = hud.get_viewport().gui_get_focus_owner()
+	_check(focus is Button, "the choice has a focused button for the gamepad")
+	await _shot("34_tide_choice")
+	var mats: int = Game.materials
+	var let_in: Button = hud.overlay_box.find_child("choice_good", true, false)
+	_check(let_in != null, "the choice offers to let him in")
+	if let_in:
+		let_in.pressed.emit()
+	await _wait(1.6)
+	_check(Game.flags.get("tanaka") == "in" and Game.materials == mats + Game.scenario.GUEST_GIFT, "Tanaka comes in with his tool bag")
+	_check(Meta.knows_clue("tide", "tanaka_story") and Game.has_insight("signal"), "Tanaka's story teaches the rescue signal")
+	if hud.overlay_kind == "reading":
+		await _shot("35_tide_tanaka_story")
+		hud._close()
+
+	# Dawn, day 2: he eats with you; the tap turns brown.
+	Game.food = 5
+	Game.water = 5
+	Game.advance_minutes(Game.NIGHT_END - Game.minutes + 1)
+	await _wait(0.3)
+	_check(Game.day == 2 and Game.food == 4 and Game.water == 4, "a guest costs food and water each morning")
+	_check(Game.water_note != "", "the tap water is contaminated on day 2")
+	var tap = apt.nav_region.get_node("tap")
+	_check("Boil" in tap.get_prompt(false), "the brown tap water can be boiled on the gas")
+	var w0: int = Game.water
+	tap.perform(false)
+	_check(Game.water == w0 + Game.scenario.BOIL_WATER, "boiling gives clean water")
+	tap.perform(true)
+	_check(Game.sick_left > 0.0, "drinking it unboiled makes you sick")
+	Game.sick_left = 0.0
+	_pose(player, Vector3(3.0, 0.0, -1.1), Vector3(3.0, -4.0, -24.0))
+	await _wait(0.8)
+	await _shot("36_tide_flood")
+
+	# Gamepad: glyphs follow the last device, the right stick looks.
+	var pad := InputEventJoypadButton.new()
+	pad.button_index = JOY_BUTTON_A
+	pad.pressed = true
+	Game.watch_input(pad)
+	_check(Game.using_pad and Game.glyph("interact") == "A", "a gamepad press switches key caps to pad glyphs")
+	_pose(player, Vector3(4.55, 0.05, 1.2), Vector3(4.55, 1.2, -0.5))
+	await _wait(0.3)
+	_check(player.focus == apt.barricades["balcony_door"] and hud.prompt_rows[0]["cap"].get_meta("key") == "A", "the use prompt shows A")
+	await _shot("37_tide_pad_prompt")
+	var yaw: float = player.rotation.y
+	Input.action_press("look_right", 1.0)
+	await _wait(0.3)
+	Input.action_release("look_right")
+	_check(player.rotation.y < yaw - 0.1, "the right stick turns the view")
+	hud._show_pause()
+	await _wait(0.2)
+	_check(hud.get_viewport().gui_get_focus_owner() is Button, "the pause menu focuses its first button")
+	await _shot("38_pause_pad")
+	hud._show_manual()
+	await _wait(0.3)
+	await _shot("38b_manual_pad")
+	hud._close()
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_E
+	key.pressed = true
+	Game.watch_input(key)
+	_check(not Game.using_pad and Game.glyph("interact") == "E", "a key press switches back to keyboard caps")
+
+	# The gas meter trips; the crank charges the phone.
+	Game.scheduled_events.push_front({"at": 0, "type": "gas_cut"})
+	await _wait(0.2)
+	_check(not Game.gas_valve_open and tap.get_prompt(false) == "", "with the gas gone, there's nothing to boil on")
+	Game.phone_battery = 20.0
+	Game.crank_phone()
+	_check(Game.phone_battery > 20.0, "the crank charger adds battery")
+
+	# Day 3: the wind drops, signal the boats for an early pickup.
+	Game.heal(Game.max_health)
+	Game.hunger = 100.0
+	Game.thirst = 100.0
+	Game.day = 3
+	Game.minutes = 15 * 60
+	Game.advance_minutes(1)
+	_check(Game.storm_level < 0.1 and "sheet" in bal.get_prompt(true), "once the wind drops, you can signal from the balcony")
+	bal.perform(true)
+	_check(Game.flags.has("signal") and Game.nights_goal() == 3, "a white sheet brings the boat a day early")
+
+	# Rescue at dawn on day 4.
+	Game.phase = Game.Phase.NIGHT
+	Game.minutes = Game.NIGHT_END - 0.5
+	await _wait(2.0)
+	_check(Game.phase == Game.Phase.WON and hud.overlay_kind == "end", "the SDF boat comes at dawn on day 4")
+	_check(Meta.wins_in("tide") == 1 and Game.end_note != "", "the rescue is recorded for Tide, with Tanaka's ending")
+	await _shot("39_tide_rescued")
+	if _failed:
+		print("SMOKE FAILED")
+		await _quit(1)
+		return
+	hud._restart()
+
+
+func _tide_second_life() -> void:
+	print("SMOKE: Tide, second life")
+	var hud = main.hud
+	var player = main.player
+	var apt = main.apartment
+	await _wait(0.5)
+	_check(Game.scenario.ID == "tide" and hud.overlay_kind == "intro", "the next life stays in Tide")
+	hud._start_run()
+	await _wait(0.3)
+	var tide = main.get_node("TideDirector")
+	# Refuse Tanaka this time: his note turns up under the door.
+	Game.advance_minutes(Game.NIGHT_START - Game.minutes + 1)
+	tide.begin_knock()
+	tide.refuse(false)
+	_check(Game.flags.get("tanaka") == "refused", "you can keep the door shut")
+	player.global_position = Vector3(3.2, 0.05, 5.0)  # in the hall, away from the glass
+	for i in 2:  # the night in two halves, patched up in between
+		Game.hunger = 100.0
+		Game.thirst = 100.0
+		Game.heal(Game.max_health)
+		Game.advance_minutes(25 * 60 - Game.minutes if i == 0 else Game.NIGHT_END - Game.minutes + 1)
+		await _wait(0.2)
+	_check(Game.is_alive_phase() and Game.day == 2, "the unprotected night is survivable away from the windows")
+	var mail = apt.nav_region.get_node("mail")
+	mail.perform(false)  # the building notice first
+	hud._close()
+	mail.perform(false)
+	await _wait(0.2)
+	_check(Meta.knows_clue("tide", "tanaka_note"), "refusing him leaves a note under the door")
+	await _shot("40_tide_tanaka_note")
+	hud._close()
+	# Death: asleep by the window when the storm blows it in.
+	Game.health = 10.0
+	var bed_w = apt.barricades["bedroom_window"]
+	_check(bed_w.broken or apt.barricades["balcony_door"].broken or apt.barricades["balcony_door"].hp < apt.barricades["balcony_door"].max_hp,
+		"an unprotected night in the storm wrecks the balcony-side glass")
+	if bed_w.broken:
+		Game.materials += 10
+		bed_w.perform(false)  # board it over, then strip it back to bare glass
+		tide.guard.levels["bedroom_window"] = 0
+		tide.guard.refresh_visual(bed_w)
+	Game.health = 10.0
+	player.global_position = Vector3(1.2, 0.05, 1.0)
+	Game.player_sleeping = true
+	tide.guard.hit("bedroom_window", 9999.0)
+	_check(Game.phase == Game.Phase.DEAD and "asleep" in Game.death_cause, "a window blowing in can kill you (%s)" % Game.death_cause)
+	Game.player_sleeping = false
+	await _wait(2.0)
+	_check(hud.overlay_kind == "end", "Tide death screen is shown")
+	await _shot("41_tide_death")
+	_check(bed_w.broken, "the window is blown in")
 	print("SMOKE OK" if not _failed else "SMOKE FAILED")
 	await _quit(1 if _failed else 0)
 

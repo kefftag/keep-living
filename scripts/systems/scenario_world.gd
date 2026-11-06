@@ -8,6 +8,8 @@ const NightDirector := preload("res://scripts/systems/night_director.gd")
 const EventDirector := preload("res://scripts/systems/event_director.gd")
 const AshDirector := preload("res://scripts/systems/ash_director.gd")
 const LooterDirector := preload("res://scripts/systems/looter_director.gd")
+const TideDirector := preload("res://scripts/systems/tide_director.gd")
+const StormGuard := preload("res://scripts/systems/storm_guard.gd")
 const Seal := preload("res://scripts/systems/seal.gd")
 const Vent := preload("res://scripts/world/vent.gd")
 
@@ -20,6 +22,12 @@ static func build(main: Node3D, zombie_parent: Node3D) -> void:
 	var seal = null
 	if s.MODE == "seal":
 		seal = _build_seals(apt, s)
+	var guard = null
+	if s.MODE == "storm":
+		guard = StormGuard.new(s)
+		for id in s.STORM_POINTS:
+			if apt.barricades.has(id):
+				guard.attach(apt.barricades[id], id)
 	for kind in s.DIRECTORS:
 		match kind:
 			"events":
@@ -51,6 +59,21 @@ static func build(main: Node3D, zombie_parent: Node3D) -> void:
 				var ash_node = main.get_node_or_null("AshDirector")
 				if ash_node:
 					ash_node.looters = lo
+			"tide":
+				var tide := TideDirector.new()
+				tide.name = "TideDirector"
+				tide.guard = guard
+				tide.apartment = apt
+				tide.player = main.player
+				guard.director = tide
+				main.add_child(tide)
+				# The sink boils the brown water, the phone plugs in at the bedside.
+				var tap = apt.nav_region.get_node_or_null("tap")
+				if tap:
+					tap.mode_handler = tide
+				var phone = apt.nav_region.get_node_or_null("phone")
+				if phone:
+					phone.alt_handler = tide
 
 
 static func _apply_clue_sources(apt: Node, sources: Dictionary) -> void:

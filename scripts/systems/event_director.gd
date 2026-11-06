@@ -47,7 +47,7 @@ func _fire(ev: Dictionary) -> void:
 			Game.water_running = false
 			Game.water_note = ev.get("note", "undrinkable")
 			Sfx.play("pipes_knock", Vector3(4.65, 1.0, 5.06), -4.0)
-			Game.say("The water from the tap has turned grey and gritty. It isn't safe to drink any more.", "warn")
+			Game.say(ev.get("text", "The water from the tap has turned grey and gritty. It isn't safe to drink any more."), "warn")
 			Game.world_changed.emit()
 		"mail":
 			Game.say(ev.get("text", ""), "info")

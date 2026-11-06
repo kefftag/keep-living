@@ -5,7 +5,8 @@ extends Node
 ## variants (step_wood_0..3) is played as "step_wood" and picks one at random.
 
 const DIR := "res://assets/audio/"
-const LOOPS := ["gas_hiss", "fridge_hum", "radio_static", "heartbeat", "helicopter", "ambience_day", "ambience_night"]
+const LOOPS := ["gas_hiss", "fridge_hum", "radio_static", "heartbeat", "helicopter", "ambience_day", "ambience_night",
+	"wind_storm", "rain_glass"]
 
 var _streams := {}     # name -> Array[AudioStream]
 var _ambience: Array = []  # [day player, night player]
@@ -145,6 +146,9 @@ func _process(delta: float) -> void:
 	var night := Game.phase == Game.Phase.NIGHT
 	var want_day := -12.0 if alive and not night else -80.0
 	var want_night := -8.0 if alive and night else -80.0
+	if Game.is_storm_mode() and Game.storm_level > 0.3:
+		want_day -= 14.0  # the typhoon drowns out the city (its own loops play instead)
+		want_night -= 10.0
 	_fade(_ambience[0], want_day, delta)
 	_fade(_ambience[1], want_night, delta)
 	var low := alive and Game.health < Game.max_health * 0.3

@@ -165,8 +165,10 @@ shared. `UNLOCK_AFTER_WIN` gates a scenario behind a rescue in another one.
 
 - **Outbreak** (built): infected, sound-driven, nightly sieges.
 - **Ash** (built, below).
-- **Static** and **Tide** show locked on the scenario select ("unlocks after
-  your first rescue in Outbreak").
+- **Tide** (built, below): unlocks after a rescue in Outbreak or Ash
+  (`UNLOCK_AFTER_WIN` may be a list: any one of them opens it).
+- **Static** shows locked on the scenario select ("unlocks after your first
+  rescue in Outbreak").
 
 ### Ash (降灰)
 Mt Fuji erupts at 07:41 on day 1. Tokyo is 100 km downwind. Survive 5 days;
@@ -213,20 +215,94 @@ an evacuation bus comes at dawn on day 6. Core decisions move from
 - **Theory:** "The mountain. Fuji has erupted." Solved: masks last 50% longer.
 - **Deaths:** ash in the lungs (unsealed / in your sleep), looters, the
   balcony door, dehydration (the grey tap), starvation.
+
+### Tide (水害)
+Typhoon No. 19, a super typhoon (超大型台風), comes ashore over Tokyo Bay at
+high tide. The surge and a breached Arakawa levee flood Koto ward. The flat is
+on the third floor, above the water, but the building is cut off. Survive 4
+nights; SDF boats come at dawn on day 5. Core decisions: **protect the glass,
+keep the phone alive, ration clean water, and decide who to let in.** All
+numbers are constants at the top of `scripts/data/scenario_tide.gd`;
+`scripts/systems/tide_director.gd` and `storm_guard.gd` run it.
+
+- **Storm:** wind follows a curve (0..1): rising from 11:00 on day 1, peak
+  23:00-04:00 on night 1, a lull on day 2, the back side (吹き返し, rolled
+  ×0.75-1.0) on night 2, calm by 14:00 on day 3. The sky darkens with it (the
+  environment rig's `storm` hook, beside Ash's `haze`), with sideways rain,
+  tumbling debris past the balcony and a grey fog.
+- **Debris:** 3 gusts per game hour at full wind, 8-16 damage × wind (×1.3 at
+  night), aimed at the balcony door 1.5 : bedroom window 1.0 : bath window 0.2.
+  The entrances are glass with their usual hp: E tapes an X across each pane
+  (1 material, ×0.85 damage) then boards it with plywood (3 materials, ×0.2);
+  patching gives +60 for 1 material. A window that blows in cuts anyone within
+  3.2 m for 35 (×0.25 taped, 0 boarded; worse asleep), may soak a food, and lets
+  the storm in (0.035 HP/min × wind per broken window, max 2) until boarded
+  over (4 materials). Night 1 throws ~15 hits at the balcony door: bare or
+  taped it blows in, boarded it needs a patch or two.
+- **The balcony:** pots, a bucket and a drying rack sit outside. R at the
+  balcony door brings them in; otherwise the first gust over 0.55 hurls them
+  into the door (45 damage).
+- **Power** dies at 18:00 on day 1 (the basement electrical room floods).
+  **Tap water** runs brown at 06:00 on day 2: boil it at the sink (E, +2 water,
+  twice a day) while the gas lasts, or drink it raw (R) and be sick for 12
+  hours (0.06 HP/min). The **gas** meter trips some time on day 3. The bathtub
+  holds 8 bottles if filled before the water turns.
+- **Phone battery** (HUD bar): starts at 35%. R on the phone at the bedside
+  plugs it in while the power lasts (+0.3%/min). Standby 0.01%/min, the phone
+  light 0.1% per real second, each alert read 3%. Low Power Mode (insight)
+  ×0.6, the solved theory ×0.7. The hand-crank charger (emergency bag, key 4 /
+  D-pad left) gives +3% per turn for 2 thirst; a mobile battery (bedroom
+  closet) adds 50% automatically at 10%. At night with no power and no light,
+  actions take 1.6× as long. At 0% the light and the phone's alerts are gone.
+- **Tanaka from 202** (the flat below: 3F is ours, so 2F is the one flooded)
+  knocks on night 1 or 2 and waits 75 s. Answering the door opens a sign card
+  with both choices and their costs. Let him in: +2 materials now, +1 each
+  morning, his story (a clue), but −1 food and −1 water each morning. Keep the
+  door shut: his note turns up under the door the next morning, and on the
+  rescue boat nobody has seen him.
+- **Signal:** with the signal insight, once the wind is under 0.35 (day 2
+  afternoon to dawn day 4), R at the balcony door hangs a white sheet by day
+  or flashes SOS with the phone light at night (10%): the boat comes at dawn
+  on day 4 instead.
+- **Clues:** the 警戒レベル5 緊急安全確保 area mail, the NHK typhoon broadcast
+  (高潮特別警報), the 江東5区 hazard map on the fridge (ここにいてはダメです),
+  the building notice about the basement electrical room and pumps, the
+  Arakawa water level push on the phone, the ward typhoon leaflet, the view
+  from the balcony, the NHK radio rescue broadcast, Tanaka's story or his note.
+- **Insights:** storm forecast (wind now and the next peak), flood depth by
+  floor, tap-water time, Prepared (bare glass, loose balcony things, unplugged
+  phone flagged), Low Power Mode, where the wind hits (tonight's expected hits
+  per window), boats at dawn day 5 (countdown), white cloth (the signal).
+- **Theory:** "The water. A typhoon and a storm surge." Solved: the phone
+  drains 30% slower.
+- **Deaths:** flying glass (awake or asleep), exposure through a broken
+  window, dysentery from raw tap water, dehydration (no bath filled),
+  starvation (sharing with Tanaka has its own line).
 - **Static:** a signal from the sky. Screens and radios are dangerous to use,
   neighbours act strangely, and clues contradict each other.
-- **Tide:** a flood or tsunami. The rising water makes the balcony and roof the
-  goal, you move valuables upward, and the building groans.
 
 ## Front end
 Boot shows the title (生きていく / KEEP LIVING over the live apartment):
 Continue / New life in the last scenario, Scenario select, Settings, Credits,
 Quit. Settings persist in `user://settings.cfg` (`scripts/autoload/settings.gd`):
-master / music-and-ambience / SFX volume, mouse sensitivity, invert Y, FOV,
+master / music-and-ambience / SFX volume, mouse sensitivity, gamepad look
+speed, invert Y (mouse and stick), FOV,
 fullscreen, 3D resolution scale, V-Sync, reduce camera shake, subtitles for
 important sounds (with left / right / behind), large text. The pause menu has
 Settings and "Title screen". After a death or rescue the next life starts on
 the intro card; the title only comes back on boot or when asked for.
+
+**Gamepad (Steam Deck).** Every action has a pad binding (`game_state.gd`):
+left stick move, right stick look (with a response curve), A use, X second
+action, RT swing, LB phone light, D-pad eat / drink / first aid / item, Y
+journal, Start menu, B back, L3 toggles walking quietly. Every menu opens with
+its first button focused, focus moves with the D-pad or left stick, the right
+stick scrolls long pages, and B backs out wherever Esc does. Key caps (hints,
+the prompt ring, button labels) show pad glyphs after any pad input and switch
+back on keyboard or mouse input (`Game.glyph(action)`). On screens of 1366×820
+or smaller (the Deck's 1280×800) the UI is laid out at 1280×800 and drawn 1:1
+so text keeps its size, and the message column shrinks to fit between the
+status panel and the entrances sign.
 
 ## Open questions / next steps
 - **Audio** is the biggest missing piece: knocking, groans, the early-warning

@@ -22,6 +22,11 @@ signal shake(amount: float, duration: float)
 signal minutes_advanced(m: float)
 ## Timeline events the shared EventDirector doesn't know (e.g. Ash's "ash_begins").
 signal scenario_event(ev: Dictionary)
+## A scenario asks the player to choose (Tide: Tanaka at the door). spec:
+## {jp, en, text, options: [{label, note, call: Callable, kind}]}; hud.gd shows it.
+signal choice_requested(spec: Dictionary)
+## The last input came from a gamepad (true) or the keyboard / mouse (false).
+signal input_device_changed(pad: bool)
 
 enum Phase { INTRO, DAY, NIGHT, DEAD, WON }
 
@@ -85,6 +90,22 @@ var balcony_load := 0.0        # 0..100, collapses at 100
 var mask_left := 0.0           # game minutes left on the mask you're wearing
 var looters_active := false
 
+# Tide (scenario_tide.gd); idle in other scenarios.
+var storm_curve: Array = []    # [[minute, wind 0..1], ...] rolled per life
+var storm_level := 0.0         # wind right now, 0..1 (set by the TideDirector)
+var flood_depth := 0.0         # metres of water in the street
+var tanaka_night := 0
+var phone_battery := 100.0     # percent
+var phone_plugged := false
+var power_banks := 0
+var has_crank := false
+var light_on := false          # the phone light (set by the player)
+var sick_left := 0.0           # game minutes of a bad stomach left
+var nights_override := 0       # > 0: rescue comes after this many nights instead
+var flags := {}                # per-run story flags ("tanaka", "signal", ...)
+var end_note := ""             # extra line on the rescue screen
+var _crank_ready_t := 0.0
+
 var scheduled_events: Array = []  # [{at, type, ...}] consumed by EventDirector
 var tonight_plan: Array = []      # entrance ids, one per zombie, rolled each morning
 var weapon_container := ""
@@ -99,6 +120,10 @@ var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	_setup_input()
+	var watch := PadWatch.new()
+	watch.name = "PadWatch"
+	watch.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(watch)
 	if "--smoke-test" in OS.get_cmdline_user_args():
 		scenario = Scenarios.ZOMBIE
 	else:
@@ -120,6 +145,15 @@ func scenario_id() -> String:
 
 func is_seal_mode() -> bool:
 	return scenario.MODE == "seal"
+
+
+func is_storm_mode() -> bool:
+	return scenario.MODE == "storm"
+
+
+## Nights to survive this life (an early rescue signal can shorten it).
+func nights_goal() -> int:
+	return nights_override if nights_override > 0 else scenario.NIGHTS_TO_SURVIVE
 
 
 # --- Run lifecycle ---------------------------------------------------------
@@ -168,6 +202,20 @@ func start_run() -> void:
 	balcony_load = 0.0
 	mask_left = 0.0
 	looters_active = false
+	storm_curve = []
+	storm_level = 0.0
+	flood_depth = 0.0
+	tanaka_night = 0
+	phone_battery = 100.0
+	phone_plugged = false
+	power_banks = 0
+	has_crank = false
+	light_on = false
+	sick_left = 0.0
+	nights_override = 0
+	flags = {}
+	end_note = ""
+	_crank_ready_t = 0.0
 	theory_attempted = false
 	zombies_killed = 0
 	run_new_clues = []
@@ -227,7 +275,10 @@ func _process(delta: float) -> void:
 		return
 
 	if hunger <= 0.0:
-		damage(delta * 0.6, death_text("starvation"))
+		var starve := "starvation"
+		if flags.get("tanaka") == "in" and scenario.DEATHS.has("starvation_guest"):
+			starve = "starvation_guest"
+		damage(delta * 0.6, death_text(starve))
 	if thirst <= 0.0:
 		damage(delta * 1.0, death_text("dehydration" if bathtub_filled_ever else "dehydration_no_tub"))
 
@@ -275,7 +326,7 @@ func _begin_night() -> void:
 func _end_night() -> void:
 	day += 1
 	minutes = float(DAY_START)
-	if day > scenario.NIGHTS_TO_SURVIVE:
+	if day > nights_goal():
 		_win()
 		return
 	phase = Phase.DAY
@@ -397,6 +448,32 @@ func wear_mask() -> void:
 	stats_changed.emit()
 
 
+## The scenario's item key (4 / D-pad left): a mask in Ash, the crank charger in Tide.
+func use_item() -> void:
+	if is_seal_mode():
+		wear_mask()
+	elif is_storm_mode():
+		crank_phone()
+
+
+## Tide: one turn of the hand-crank charger.
+func crank_phone() -> void:
+	if not has_crank:
+		say("You have nothing to charge the phone with.", "warn")
+		return
+	if phone_battery >= 99.5:
+		say("The phone is fully charged.", "info")
+		return
+	if run_time < _crank_ready_t:
+		return
+	_crank_ready_t = run_time + scenario.CRANK_COOLDOWN
+	phone_battery = min(100.0, phone_battery + scenario.CRANK_GAIN)
+	thirst = max(0.0, thirst - scenario.CRANK_THIRST)
+	Sfx.play("crank", null, -6.0)
+	say("You wind the charger until your arm aches. (Phone %d%%)" % int(phone_battery), "info")
+	stats_changed.emit()
+
+
 func air_quality() -> float:
 	return 100.0 - dust
 
@@ -436,6 +513,13 @@ func collect_loot(loot: Dictionary, source_name: String) -> void:
 			"masks":
 				masks += amount
 				parts.append("%d dust mask%s" % [amount, "" if amount == 1 else "s"])
+			"power_banks":
+				power_banks += amount
+				parts.append("a charged MOBILE BATTERY" if amount == 1 else "%d mobile batteries" % amount)
+			"crank":
+				if not has_crank:
+					has_crank = true
+					parts.append("a HAND-CRANK CHARGER (key %s)" % glyph("mask"))
 			"weapon":
 				if not has_weapon:
 					has_weapon = true
@@ -464,7 +548,10 @@ func weapon_damage() -> float:
 
 
 func action_speed() -> float:
-	return 1.3 if Meta.has_perk("steady_hands") else 1.0
+	var s := 1.3 if Meta.has_perk("steady_hands") else 1.0
+	if is_storm_mode() and phase == Phase.NIGHT and not power_on and not light_on:
+		s /= scenario.DARK_SLOWDOWN  # fumbling in the dark
+	return s
 
 
 # --- Noise -------------------------------------------------------------------
@@ -533,32 +620,150 @@ func say(text: String, kind: String = "info") -> void:
 
 
 # --- Input map (built in code so project.godot stays readable) ----------------
+# Keyboard and mouse, plus a gamepad layout for the Steam Deck (Xbox names):
+#   left stick move, right stick look, A use, X second action, RT swing,
+#   LB phone light, D-pad eat / drink / first aid / item, Y journal,
+#   Start menu, B back (ui_cancel), L3 walk quietly (toggle).
+
+const KEYS := {
+	"move_up": [KEY_W, KEY_UP],
+	"move_down": [KEY_S, KEY_DOWN],
+	"move_left": [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"interact": [KEY_E],
+	"interact_alt": [KEY_R],
+	"attack": [KEY_SPACE],
+	"sneak": [KEY_SHIFT],
+	"flashlight": [KEY_F],
+	"eat": [KEY_1],
+	"drink": [KEY_2],
+	"medkit": [KEY_3],
+	"mask": [KEY_4],
+	"journal": [KEY_J, KEY_TAB],
+	"pause": [KEY_ESCAPE],
+}
+const PAD_BUTTONS := {
+	"interact": [JOY_BUTTON_A],
+	"interact_alt": [JOY_BUTTON_X],
+	"flashlight": [JOY_BUTTON_LEFT_SHOULDER],
+	"eat": [JOY_BUTTON_DPAD_UP],
+	"drink": [JOY_BUTTON_DPAD_RIGHT],
+	"medkit": [JOY_BUTTON_DPAD_DOWN],
+	"mask": [JOY_BUTTON_DPAD_LEFT],
+	"journal": [JOY_BUTTON_Y],
+	"pause": [JOY_BUTTON_START],
+	"sneak_toggle": [JOY_BUTTON_LEFT_STICK],
+}
+## action -> [axis, direction]
+const PAD_AXES := {
+	"move_up": [JOY_AXIS_LEFT_Y, -1.0],
+	"move_down": [JOY_AXIS_LEFT_Y, 1.0],
+	"move_left": [JOY_AXIS_LEFT_X, -1.0],
+	"move_right": [JOY_AXIS_LEFT_X, 1.0],
+	"look_up": [JOY_AXIS_RIGHT_Y, -1.0],
+	"look_down": [JOY_AXIS_RIGHT_Y, 1.0],
+	"look_left": [JOY_AXIS_RIGHT_X, -1.0],
+	"look_right": [JOY_AXIS_RIGHT_X, 1.0],
+	"attack": [JOY_AXIS_TRIGGER_RIGHT, 1.0],
+}
+## What each action's key cap says, on the keyboard and on a gamepad.
+const GLYPHS := {
+	"move": ["WASD", "LS"],
+	"look": ["Mouse", "RS"],
+	"interact": ["E", "A"],
+	"interact_alt": ["R", "X"],
+	"attack": ["LMB", "RT"],
+	"sneak": ["Shift", "L3"],
+	"flashlight": ["F", "LB"],
+	"eat": ["1", "D↑"],
+	"drink": ["2", "D→"],
+	"medkit": ["3", "D↓"],
+	"mask": ["4", "D←"],
+	"journal": ["J", "Y"],
+	"pause": ["Esc", "Start"],
+	"back": ["Esc", "B"],
+	"accept": ["E", "A"],
+}
+const STICK_DEADZONE := 0.2
+
+## True while the last input came from a gamepad: key caps show pad glyphs.
+var using_pad := false
+
 
 func _setup_input() -> void:
-	var keys := {
-		"move_up": [KEY_W, KEY_UP],
-		"move_down": [KEY_S, KEY_DOWN],
-		"move_left": [KEY_A, KEY_LEFT],
-		"move_right": [KEY_D, KEY_RIGHT],
-		"interact": [KEY_E],
-		"interact_alt": [KEY_R],
-		"attack": [KEY_SPACE],
-		"sneak": [KEY_SHIFT],
-		"flashlight": [KEY_F],
-		"eat": [KEY_1],
-		"drink": [KEY_2],
-		"medkit": [KEY_3],
-		"mask": [KEY_4],
-		"journal": [KEY_J, KEY_TAB],
-		"pause": [KEY_ESCAPE],
-	}
-	for action in keys:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		for keycode in keys[action]:
+	for action in KEYS:
+		_ensure_action(action)
+		for keycode in KEYS[action]:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = keycode
 			InputMap.action_add_event(action, ev)
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	InputMap.action_add_event("attack", click)
+	for action in PAD_BUTTONS:
+		_ensure_action(action)
+		for b in PAD_BUTTONS[action]:
+			var ev := InputEventJoypadButton.new()
+			ev.button_index = b
+			InputMap.action_add_event(action, ev)
+	for action in PAD_AXES:
+		_ensure_action(action)
+		var ev := InputEventJoypadMotion.new()
+		ev.axis = PAD_AXES[action][0]
+		ev.axis_value = PAD_AXES[action][1]
+		InputMap.action_add_event(action, ev)
+		if action.begins_with("move") or action.begins_with("look"):
+			InputMap.action_set_deadzone(action, STICK_DEADZONE)
+	InputMap.action_set_deadzone("attack", 0.4)
+	# Menus: the left stick moves focus too; D-pad, A and B are Godot's
+	# defaults for ui_*, but make sure of them.
+	for pair in [["ui_up", JOY_AXIS_LEFT_Y, -1.0], ["ui_down", JOY_AXIS_LEFT_Y, 1.0],
+			["ui_left", JOY_AXIS_LEFT_X, -1.0], ["ui_right", JOY_AXIS_LEFT_X, 1.0]]:
+		var ev := InputEventJoypadMotion.new()
+		ev.axis = pair[1]
+		ev.axis_value = pair[2]
+		if not InputMap.action_has_event(pair[0], ev):
+			InputMap.action_add_event(pair[0], ev)
+	for pair in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B], ["ui_up", JOY_BUTTON_DPAD_UP],
+			["ui_down", JOY_BUTTON_DPAD_DOWN], ["ui_left", JOY_BUTTON_DPAD_LEFT], ["ui_right", JOY_BUTTON_DPAD_RIGHT]]:
+		var ev := InputEventJoypadButton.new()
+		ev.button_index = pair[1]
+		if not InputMap.action_has_event(pair[0], ev):
+			InputMap.action_add_event(pair[0], ev)
+
+
+func _ensure_action(action: String) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action)
+
+
+## The key cap text for an action ("E" / "A"), for the input device in use.
+func glyph(action: String) -> String:
+	var g: Array = GLYPHS.get(action, [action, action])
+	return g[1] if using_pad else g[0]
+
+
+## Watches input even while the tree is paused (menus), unlike Game itself.
+class PadWatch extends Node:
+	func _input(event: InputEvent) -> void:
+		Game.watch_input(event)
+
+
+func watch_input(event: InputEvent) -> void:
+	var pad := using_pad
+	if event is InputEventJoypadButton:
+		pad = true
+	elif event is InputEventJoypadMotion:
+		if absf((event as InputEventJoypadMotion).axis_value) > 0.5:
+			pad = true
+	elif event is InputEventKey or event is InputEventMouseButton:
+		pad = false
+	elif event is InputEventMouseMotion and (event as InputEventMouseMotion).relative.length() > 3.0:
+		pad = false
+	if pad != using_pad:
+		set_using_pad(pad)
+
+
+func set_using_pad(pad: bool) -> void:
+	using_pad = pad
+	input_device_changed.emit(pad)
