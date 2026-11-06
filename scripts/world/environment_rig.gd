@@ -60,6 +60,17 @@ var sun: DirectionalLight3D
 var sky_mat: ShaderMaterial
 var cam_attr: CameraAttributesPractical
 var _last_key := Vector4(-1, -1, -1, -1)
+var _last_haze := -1.0
+var _last_minutes := 0.0
+var haze := 0.0  # 0 clear .. 1 thick volcanic ash overhead (Ash scenario); eased
+
+
+## How much ash hangs in the sky right now (Ash scenario), 0..1.
+static func ash_haze_target() -> float:
+	if not Game.ash_falling or Game.ash_forecast.is_empty():
+		return 0.0
+	var rate: float = Game.ash_forecast[clampi(Game.day - 1, 0, Game.ash_forecast.size() - 1)]
+	return clampf(0.45 + rate * 0.45, 0.0, 0.95)
 
 
 func _ready() -> void:
@@ -168,7 +179,11 @@ func _ready() -> void:
 	update_daylight()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# The sky browns over ~30 game minutes (game time, so rests and fast-forward keep up).
+	var dm: float = clampf(Game.minutes - _last_minutes, 0.0, 600.0)
+	_last_minutes = Game.minutes
+	haze = move_toward(haze, ash_haze_target(), dm * 0.035 + delta * 0.02)
 	update_daylight()
 
 
@@ -235,6 +250,11 @@ func update_daylight() -> void:
 		sun_dir = _dir(20.0, 50.0)
 		color = Color(0.55, 0.65, 0.9)
 		energy = 0.15 * night_w
+	# Volcanic ash: a dim, orange-brown sun behind a brown overcast.
+	if haze > 0.001:
+		color = color.lerp(Color(1.0, 0.62, 0.38), haze)
+		energy *= lerpf(1.0, 0.12, haze)
+		sky_e *= lerpf(1.0, 0.35, haze)
 	sun.light_color = color
 	sun.light_energy = energy
 	sun.visible = energy > 0.001
@@ -243,8 +263,11 @@ func update_daylight() -> void:
 
 	# Only touch the sky when it changed visibly (each change re-filters radiance).
 	var key := Vector4(snappedf(day_w, 0.02), snappedf(dusk_w, 0.02), snappedf(sky_e, 0.01), snappedf(a.x, 1.0))
-	if key != _last_key:
+	if key != _last_key or absf(haze - _last_haze) > 0.02:
 		_last_key = key
+		_last_haze = haze
+		sky_mat.set_shader_parameter("tint", Vector3(1, 1, 1).lerp(Vector3(0.78, 0.6, 0.44), haze))
+		sky_mat.set_shader_parameter("saturation", lerpf(0.7, 0.35, haze))
 		var sun_u := _u_of(_dir(a.x, 0.0))
 		sky_mat.set_shader_parameter("weights", Vector3(day_w, dusk_w, night_w))
 		sky_mat.set_shader_parameter("rotations", Vector3(DAY_SUN_U - sun_u, DUSK_SUN_U - sun_u, NIGHT_GLOW_U - _u_of(_dir(20.0, 0.0))))

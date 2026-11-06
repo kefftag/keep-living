@@ -241,9 +241,9 @@ func _process(delta: float) -> void:
 		# Haze: thin brown-grey fog that thickens with the ashfall and the ash indoors.
 		_env_t = 0.25
 		_env.fog_enabled = Game.ash_falling
-		_env.fog_light_color = Color(0.55, 0.5, 0.44)
-		_env.fog_light_energy = 0.6
-		_env.fog_density = 0.004 + rate * 0.012 + Game.dust * 0.0003
+		_env.fog_light_color = Color(0.62, 0.46, 0.3)  # brown volcanic haze
+		_env.fog_light_energy = 0.9
+		_env.fog_density = 0.008 + rate * 0.02 + Game.dust * 0.0003
 		_env.fog_sky_affect = 0.6
 	# A cough now and then while the air is bad.
 	if Game.is_alive_phase() and Game.air_quality() < scenario().HARM_BELOW and Game.mask_left <= 0.0:
