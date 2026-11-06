@@ -28,7 +28,11 @@ godot --headless --path . --import
 godot --headless --path . -- --smoke-test
 ```
 
-`--shots=/abs/dir` (non-headless, e.g. under `xvfb-run`) saves screenshots.
+Screenshots: `tools/dev/shots.sh /abs/dir` runs the smoke test in a real window **in the
+background** (launched with `open -g`; the window can't take focus or catch clicks, the mouse is
+never captured, and real input is ignored), so it doesn't disturb whoever is using the Mac. It
+prints the result lines and saves `NN_name.png` plus `godot.log` in the directory. On Linux use
+`--shots=/abs/dir` under `xvfb-run`.
 
 ## Art & sound
 - Model lookup per prop name: `assets/models/<name>/<name>.gltf` (Poly Haven scan, fitted to the

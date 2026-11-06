@@ -15,7 +15,20 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shots="):
 			_shots_dir = arg.substr(8)
+	if DisplayServer.get_name() != "headless":
+		# Screenshot runs open a real window: keep it from taking focus or
+		# catching clicks, so the person at the computer can keep working.
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_MOUSE_PASSTHROUGH, true)
 	_run()
+
+
+## The run is driven by direct calls, never by real input. Swallow every real
+## keyboard / mouse / focus event (this node is added last, so it sees them
+## first) so a stray key or click on the window can't skip the intro or move
+## the player.
+func _input(_event: InputEvent) -> void:
+	get_viewport().set_input_as_handled()
 
 
 func _wait(seconds: float) -> void:

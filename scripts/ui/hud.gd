@@ -607,7 +607,8 @@ func _build_crosshair() -> void:
 
 
 func _capture_mouse(captured: bool) -> void:
-	if DisplayServer.get_name() == "headless":
+	# Automated runs (smoke test, screenshots) must never grab the user's mouse.
+	if DisplayServer.get_name() == "headless" or "--smoke-test" in OS.get_cmdline_user_args():
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if captured else Input.MOUSE_MODE_VISIBLE
 
