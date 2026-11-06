@@ -597,7 +597,7 @@ func _build_outside() -> void:
 
 # --- Lights & world --------------------------------------------------------------
 
-const K_NEUTRAL := Color(1.0, 0.9, 0.8)     # 昼白色 ~5000 K LED
+const K_NEUTRAL := Color(1.0, 0.95, 0.91)    # 昼白色 ~5000 K LED
 const K_WARM := Color(1.0, 0.82, 0.64)      # 電球色 ~2800 K (toned down: walls are warm already)
 const K_FLUO := Color(0.86, 0.96, 1.0)       # cool corridor fluorescent
 

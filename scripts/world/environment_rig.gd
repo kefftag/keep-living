@@ -97,7 +97,7 @@ func _ready() -> void:
 	env.sdfgi_cascades = 4
 	env.sdfgi_min_cell_size = 0.1
 	env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_50_PERCENT
-	env.sdfgi_bounce_feedback = 0.5
+	env.sdfgi_bounce_feedback = 0.3  # more feedback snowballs the warm floor bounce onto white walls
 	env.sdfgi_energy = 1.0
 	env.sdfgi_normal_bias = 1.1
 	env.sdfgi_probe_bias = 1.1
