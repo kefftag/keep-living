@@ -421,9 +421,86 @@ def ash():
     save("bus", y * np.minimum(1, tt / 0.8), 0.8)
 
 
+def tide():
+    """Tide scenario: typhoon wind, rain on glass, debris hits, knocking, the crank, a boat."""
+    r = np.random.default_rng(1919)  # own generator: regenerating only these keeps the rest identical
+
+    def rnoise(dur):
+        return r.standard_normal(int(dur * SR))
+
+    # Typhoon wind around the building: a roaring low band whose strength
+    # surges in gusts, a whistle in the balcony railings, a buffeting rumble.
+    d = 12.0
+    tt = t(d)
+    gust = np.zeros(len(tt))
+    for k in range(9):  # slow overlapping gust envelopes
+        c, w = r.uniform(0, d), r.uniform(0.8, 2.2)
+        gust += np.exp(-0.5 * ((tt - c) / w) ** 2) * r.uniform(0.5, 1.0)
+        gust += np.exp(-0.5 * ((tt - c + d) / w) ** 2) * 0.5  # wrap so the loop doesn't dip
+    gust = 0.45 + gust / gust.max()
+    roar = bandpass(rnoise(d), 120, 900) * gust
+    hiss = bandpass(rnoise(d), 1200, 5000) * 0.25 * gust ** 1.5
+    fw = 820 + 260 * np.sin(2 * np.pi * 0.11 * tt) + 120 * gust
+    whistle = np.sin(2 * np.pi * np.cumsum(fw) / SR) * 0.05 * np.clip(gust - 0.9, 0, None)
+    thump = lowpass(rnoise(d), 60) * 0.9 * gust
+    save("wind_storm", fade_loop(roar + hiss + whistle + thump, 1.5), 0.6)
+    # Wind-driven rain on glass: dense fine ticks over a wash, in sheets.
+    d = 8.0
+    tt = t(d)
+    wash = bandpass(rnoise(d), 800, 9000) * (0.6 + 0.4 * np.sin(2 * np.pi * 0.23 * tt) ** 2)
+    ticks = np.zeros(len(tt))
+    for k in range(2600):
+        n = int(r.uniform(0.0015, 0.004) * SR)
+        place(ticks, r.standard_normal(n) * np.exp(-np.arange(n) / SR / 0.0008) * r.uniform(0.2, 1.0), r.uniform(0, d - 0.01))
+    ticks = highpass(ticks, 1500)
+    save("rain_glass", fade_loop(wash * 0.5 + ticks * 0.9, 1.0), 0.5)
+    # Debris hitting the glass or frame: a dull slap, a rattle of the sash, a skitter.
+    for i in range(3):
+        y = np.zeros(int(1.0 * SR))
+        place(y, lowpass(rnoise(0.12), 700) * env_exp(int(0.12 * SR), 0.03) * 1.6, 0.0)
+        place(y, resonator(0.6, [230 + 40 * i, 610, 1450, 3100], [0.12, 0.07, 0.05, 0.03], [0.8, 0.5, 0.35, 0.2]), 0.0)
+        for k in range(6):  # the sash rattling in its frame
+            place(y, bandpass(rnoise(0.02), 1500, 6000) * env_exp(int(0.02 * SR), 0.005) * r.uniform(0.2, 0.6), 0.05 + k * r.uniform(0.04, 0.07))
+        save("debris_hit_%d" % i, y, 0.85)
+    # Knocking on a steel apartment door: three knuckle raps, a little uneven.
+    for i in range(3):
+        y = np.zeros(int(1.6 * SR))
+        at = 0.0
+        for k in range(3 + (i == 1)):
+            rap = resonator(0.35, [180, 410, 870, 1320], [0.09, 0.06, 0.04, 0.025], [1, 0.7, 0.4, 0.2])
+            place(rap, lowpass(rnoise(0.02), 2000) * env_exp(int(0.02 * SR), 0.004) * 0.8, 0.0)
+            place(y, rap * r.uniform(0.7, 1.0) * (1.0 - 0.15 * k), at)
+            at += r.uniform(0.22, 0.32)
+        save("knock_%d" % i, lowpass(y, 2500), 0.8)
+    # Hand-crank charger: a geared whirr rising and falling with each turn.
+    d = 1.6
+    tt = t(d)
+    rate = 7.0 + 2.0 * np.sin(2 * np.pi * 1.2 * tt)
+    gear = np.sign(np.sin(2 * np.pi * np.cumsum(rate * 22) / SR)) * 0.25
+    whirr = bandpass(gear + rnoise(d) * 0.2, 400, 4000) * (0.6 + 0.4 * np.sin(2 * np.pi * 1.2 * tt) ** 2)
+    save("crank", whirr * adsr(len(tt), 0.05, 0.1, 0.9, 0.2), 0.6)
+    # An outboard motor coming closer over open water: a two-stroke buzz.
+    d = 6.0
+    tt = t(d)
+    f0 = 55 + 6 * np.sin(2 * np.pi * 0.3 * tt)
+    ph = 2 * np.pi * np.cumsum(f0) / SR
+    engine = sum(np.sin(k * ph) / k for k in range(1, 12)) + bandpass(rnoise(d), 300, 2500) * 0.25
+    engine = lowpass(engine, 2200) * (1 + 0.3 * np.sin(2 * np.pi * 5.0 * tt))
+    slap = lowpass(rnoise(d), 400) * (0.4 + 0.3 * np.sin(2 * np.pi * 0.7 * tt)) * 0.4  # hull on the water
+    save("boat", (engine + slap) * np.minimum(1, tt / 2.5) * np.minimum(1, (d - tt) / 0.5), 0.8)
+
+
+GROUPS = (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc, ash, tide)
+
+
 def main():
+    """`make_sounds.py` makes everything; `make_sounds.py tide ash` only those groups."""
+    import sys
     os.makedirs(OUT, exist_ok=True)
-    for fn in (footsteps, doors, bangs, breaks, groans, combat, work, phone, alarm, quake, loops, ambience, misc, ash):
+    want = set(sys.argv[1:])
+    for fn in GROUPS:
+        if want and fn.__name__ not in want:
+            continue
         fn()
         print("made", fn.__name__)
 
