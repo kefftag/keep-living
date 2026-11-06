@@ -76,7 +76,23 @@ static func font(path: String) -> Font:
 	return ThemeDB.fallback_font
 
 
+## The UI face is BIZ UDPGothic **Bold** everywhere: real signage is set
+## heavy, and the user wants text that's obvious at a glance. Regular stays
+## available for anything that must read lighter.
 static func ui_font() -> Font:
+	if _ui_font == null:
+		var v := FontVariation.new()
+		v.base_font = font(FONT_UI_BOLD)
+		v.variation_embolden = EMBOLDEN
+		_ui_font = v
+	return _ui_font
+
+
+static var _ui_font: Font
+const EMBOLDEN := 0.4  # a touch heavier than BIZ UD Bold, like printed sign lettering
+
+
+static func regular_font() -> Font:
 	return font(FONT_UI)
 
 
@@ -126,15 +142,15 @@ static func build_theme() -> Theme:
 	t.default_font_size = FS_HUD
 
 	t.set_color("font_color", "Label", PAPER)
-	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.75))
-	t.set_constant("outline_size", "Label", 3)
+	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.85))
+	t.set_constant("outline_size", "Label", 5)
 	t.set_constant("line_spacing", "Label", 2)
 
 	t.set_font("normal_font", "RichTextLabel", ui_font())
 	t.set_font("bold_font", "RichTextLabel", bold_font())
 	t.set_color("default_color", "RichTextLabel", PAPER)
-	t.set_color("font_outline_color", "RichTextLabel", Color(0, 0, 0, 0.75))
-	t.set_constant("outline_size", "RichTextLabel", 3)
+	t.set_color("font_outline_color", "RichTextLabel", Color(0, 0, 0, 0.85))
+	t.set_constant("outline_size", "RichTextLabel", 5)
 
 	t.set_stylebox("panel", "PanelContainer", panel_box())
 

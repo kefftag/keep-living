@@ -752,7 +752,7 @@ func _on_message(text: String, kind: String) -> void:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(770, 0)
-	l.add_theme_constant_override("outline_size", 4)
+	l.add_theme_constant_override("outline_size", 5)
 	# A dark caption strip behind each line, like TV subtitles, so green and
 	# white text stay readable over white walls and pale floors.
 	var plate := PanelContainer.new()
