@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cmbjk1ha41nv7"
-path="res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.ctex"
+path.s3tc="res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.s3tc.ctex"
+path.etc2="res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b920a1952c37a0e9ad6af9a570aff311"
@@ -14,17 +16,17 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/vanity_vanity_rm.jpg"
-dest_files=["res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.ctex"]
+dest_files=["res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.s3tc.ctex", "res://.godot/imported/vanity_vanity_rm.jpg-377e593d9f8a79adf6c347c68796fe68.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=2
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
-detect_3d/compress_to=1
+process/size_limit=1024
+detect_3d/compress_to=0

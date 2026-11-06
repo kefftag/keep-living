@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cfy0qcnt1o4yh"
 path.s3tc="res://.godot/imported/bath_panel_albedo.jpg-e60600153c9611b4b4ece95c96ccceeb.s3tc.ctex"
+path.etc2="res://.godot/imported/bath_panel_albedo.jpg-e60600153c9611b4b4ece95c96ccceeb.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/bath_panel_albedo.jpg"
-dest_files=["res://.godot/imported/bath_panel_albedo.jpg-e60600153c9611b4b4ece95c96ccceeb.s3tc.ctex"]
+dest_files=["res://.godot/imported/bath_panel_albedo.jpg-e60600153c9611b4b4ece95c96ccceeb.s3tc.ctex", "res://.godot/imported/bath_panel_albedo.jpg-e60600153c9611b4b4ece95c96ccceeb.etc2.ctex"]
 
 [params]
 

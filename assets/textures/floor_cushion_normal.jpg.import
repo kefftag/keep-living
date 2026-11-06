@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://tspgwcbs4ld"
 path.s3tc="res://.godot/imported/floor_cushion_normal.jpg-e194a03c52255c8e570c39e2c20de2b9.s3tc.ctex"
+path.etc2="res://.godot/imported/floor_cushion_normal.jpg-e194a03c52255c8e570c39e2c20de2b9.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/floor_cushion_normal.jpg"
-dest_files=["res://.godot/imported/floor_cushion_normal.jpg-e194a03c52255c8e570c39e2c20de2b9.s3tc.ctex"]
+dest_files=["res://.godot/imported/floor_cushion_normal.jpg-e194a03c52255c8e570c39e2c20de2b9.s3tc.ctex", "res://.godot/imported/floor_cushion_normal.jpg-e194a03c52255c8e570c39e2c20de2b9.etc2.ctex"]
 
 [params]
 

@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://57maak5kvf0h"
 path.s3tc="res://.godot/imported/facade_tile_normal.jpg-be423b4e8c57e22af1834904b73ef891.s3tc.ctex"
+path.etc2="res://.godot/imported/facade_tile_normal.jpg-be423b4e8c57e22af1834904b73ef891.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/facade_tile_normal.jpg"
-dest_files=["res://.godot/imported/facade_tile_normal.jpg-be423b4e8c57e22af1834904b73ef891.s3tc.ctex"]
+dest_files=["res://.godot/imported/facade_tile_normal.jpg-be423b4e8c57e22af1834904b73ef891.s3tc.ctex", "res://.godot/imported/facade_tile_normal.jpg-be423b4e8c57e22af1834904b73ef891.etc2.ctex"]
 
 [params]
 

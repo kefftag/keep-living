@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dxkwk8lj67wna"
 path.s3tc="res://.godot/imported/floor_bath_normal.jpg-18ace50d1ac7925f003a11d718815e75.s3tc.ctex"
+path.etc2="res://.godot/imported/floor_bath_normal.jpg-18ace50d1ac7925f003a11d718815e75.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/floor_bath_normal.jpg"
-dest_files=["res://.godot/imported/floor_bath_normal.jpg-18ace50d1ac7925f003a11d718815e75.s3tc.ctex"]
+dest_files=["res://.godot/imported/floor_bath_normal.jpg-18ace50d1ac7925f003a11d718815e75.s3tc.ctex", "res://.godot/imported/floor_bath_normal.jpg-18ace50d1ac7925f003a11d718815e75.etc2.ctex"]
 
 [params]
 
