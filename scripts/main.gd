@@ -8,6 +8,7 @@ const NightDirector := preload("res://scripts/systems/night_director.gd")
 const EventDirector := preload("res://scripts/systems/event_director.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const SmokeTest := preload("res://scripts/dev/smoke_test.gd")
+const EnvironmentRig := preload("res://scripts/world/environment_rig.gd")
 
 var apartment: Node3D
 var player: CharacterBody3D
@@ -59,38 +60,11 @@ func _ready() -> void:
 
 
 func _build_environment() -> void:
-	var we := WorldEnvironment.new()
-	env = Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.35, 0.5, 0.72)
-	sky_mat.sky_horizon_color = Color(0.72, 0.76, 0.8)
-	sky_mat.ground_horizon_color = Color(0.5, 0.5, 0.52)
-	sky_mat.ground_bottom_color = Color(0.2, 0.2, 0.22)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.background_mode = Environment.BG_SKY
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.8, 0.8, 0.85)
-	env.ambient_light_energy = 0.35
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.95
-	env.ssao_enabled = true
-	env.glow_enabled = true
-	env.glow_intensity = 0.5
-	we.environment = env
-	add_child(we)
-
-	# Sunlight comes in through the balcony side (south-facing, as most
-	# Japanese apartments are), low enough to reach under the eaves.
-	sun = DirectionalLight3D.new()
-	sun.shadow_enabled = true
-	sun.rotation_degrees = Vector3(-28, 165, 0)
-	add_child(sun)
-
-
-func _process(_delta: float) -> void:
-	_update_daylight()
+	var rig := EnvironmentRig.new()
+	rig.name = "Environment"
+	add_child(rig)
+	env = rig.env
+	sun = rig.sun
 
 
 func _exit_tree() -> void:
@@ -99,27 +73,3 @@ func _exit_tree() -> void:
 	Props._materials.clear()
 	Props._surfaces.clear()
 
-
-## Daylight follows the clock: day white, dusk orange, night dark blue.
-func _update_daylight() -> void:
-	var m := fmod(Game.minutes, 1440.0)
-	var day_color := Color(1.0, 0.96, 0.88)
-	var dusk_color := Color(1.0, 0.55, 0.3)
-	var night_color := Color(0.35, 0.42, 0.65)
-	var energy := 1.2
-	var c := day_color
-	var sky_e := 1.0
-	if m >= 17 * 60 and m < 20 * 60:
-		var t := (m - 17 * 60) / 180.0
-		c = day_color.lerp(dusk_color, t)
-		energy = lerp(1.2, 0.4, t)
-		sky_e = lerp(1.0, 0.25, t)
-	elif m >= 20 * 60 or m < 6 * 60:
-		c = night_color
-		energy = 0.12
-		sky_e = 0.04
-	sun.light_color = c
-	sun.light_energy = energy
-	env.background_energy_multiplier = sky_e
-	env.ambient_light_energy = 0.35 if energy > 0.5 else 0.12
-	env.ambient_light_color = Color(0.8, 0.8, 0.85) if energy > 0.5 else Color(0.35, 0.4, 0.6)
