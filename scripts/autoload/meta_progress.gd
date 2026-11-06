@@ -9,7 +9,9 @@ signal changed
 
 const SAVE_NAME := "keep_living_meta.json"
 const SAVE_PATH := "user://" + SAVE_NAME
-const TEST_SAVE_PATH := "user://keep_living_meta_smoke.json"
+## Smoke tests save per process: several checkouts can run them at once and
+## they all share the one user dir.
+const TEST_SAVE_PATH := "user://keep_living_meta_smoke_%d.json"
 ## Where saves lived before project.godot set a custom user dir ("KeepLiving").
 const OLD_USER_DIR := "Godot/app_userdata/Keep Living"
 const SAVE_VERSION := 2
@@ -35,7 +37,7 @@ var save_path := SAVE_PATH
 func _ready() -> void:
 	if "--smoke-test" in OS.get_cmdline_user_args():
 		# Automated runs never touch the player's real save.
-		save_path = TEST_SAVE_PATH
+		save_path = TEST_SAVE_PATH % OS.get_process_id()
 		reset_all()
 	else:
 		_migrate_old_save()
